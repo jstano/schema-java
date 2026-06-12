@@ -19,7 +19,7 @@ public class LiquibaseSchemaInstaller extends SchemaInstaller {
       Connection connection, DatabaseType databaseType, SchemaContext schemaContext, File sqlFile)
       throws IOException {
     File tempChangeLogFile =
-        createTempChangeLogFile(databaseType, sqlFile, schemaContext.getEndDelimiter());
+        createTempChangeLogFile(databaseType, sqlFile, databaseType.getStatementSeparator());
     executeTempChangeLog(connection, tempChangeLogFile);
   }
 

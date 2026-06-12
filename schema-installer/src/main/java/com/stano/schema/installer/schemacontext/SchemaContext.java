@@ -21,11 +21,6 @@ public interface SchemaContext {
 
   void schemaInstalled(Connection connection) throws SQLException;
 
-  default String getEndDelimiter() {
-
-    return "GO";
-  }
-
   default String getMigrateParams(DataSourceInfo dataSourceInfo) {
 
     return String.format(

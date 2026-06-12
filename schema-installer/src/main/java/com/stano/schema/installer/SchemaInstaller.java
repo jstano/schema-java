@@ -143,7 +143,7 @@ public abstract class SchemaInstaller {
         foreignKeyMode,
         booleanMode,
         OutputMode.ALL,
-        "\nGO");
+        databaseType.getStatementSeparator());
   }
 
   private void generateSqlToTempSqlFile(InputStream inputStream, File tempSqlFile)
