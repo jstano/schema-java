@@ -76,4 +76,19 @@ class LiquibaseChangeLogCreatorTest {
         content.contains("endDelimiter=\"&<>\"\""),
         "raw special chars should not appear unescaped");
   }
+
+  @Test
+  @DisplayName(
+      "createTempChangeLogFile escapes newline in endDelimiter as \\n for Liquibase compatibility")
+  void createTempChangeLogFileEscapesNewlineInEndDelimiter() throws Exception {
+    File changeLogFile = creator.createTempChangeLogFile(DatabaseType.SQL_SERVER, sqlFile, "\nGO");
+
+    String content = Files.readString(changeLogFile.toPath());
+    assertTrue(
+        content.contains("endDelimiter=\"\\nGO\""),
+        "real newline should be escaped as \\n for Liquibase");
+    assertFalse(
+        content.contains("endDelimiter=\"\nGO\""),
+        "raw newline byte should not appear in the attribute");
+  }
 }

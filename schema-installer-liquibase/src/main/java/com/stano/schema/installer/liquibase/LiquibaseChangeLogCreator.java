@@ -43,6 +43,7 @@ public class LiquibaseChangeLogCreator {
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace("\"", "&quot;");
+        .replace("\"", "&quot;")
+        .replace("\n", "\\n");
   }
 }
