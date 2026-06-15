@@ -15,6 +15,11 @@ public class LiquibaseSchemaInstaller extends SchemaInstaller {
   private LiquibaseChangeLogExecutor liquibaseChangeLogExecutor = new LiquibaseChangeLogExecutor();
 
   @Override
+  protected String getDefaultMigrationScriptLocator() {
+    return "db/changelog/db.changelog-master.xml";
+  }
+
+  @Override
   protected void executeSqlFile(
       Connection connection, DatabaseType databaseType, SchemaContext schemaContext, File sqlFile)
       throws IOException {

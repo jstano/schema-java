@@ -82,6 +82,10 @@ public abstract class SchemaInstaller {
     String migrationScriptLocator = schemaContext.getMigrationScriptLocator(connection);
 
     if (migrationScriptLocator == null) {
+      migrationScriptLocator = getDefaultMigrationScriptLocator();
+    }
+
+    if (migrationScriptLocator == null) {
       return;
     }
 
@@ -110,6 +114,10 @@ public abstract class SchemaInstaller {
     } catch (IOException | SQLException x) {
       throw new SchemaMigrationException(x);
     }
+  }
+
+  protected String getDefaultMigrationScriptLocator() {
+    return null;
   }
 
   protected void executeMigrationScripts(

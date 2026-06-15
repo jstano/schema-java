@@ -22,6 +22,8 @@ dependencies {
     api("org.apache.commons:commons-text:1.15.0")
     api("org.apache.groovy:groovy-all:4.0.32")
     api("org.flywaydb:flyway-core:12.8.1")
+    api("org.flywaydb:flyway-database-postgresql:12.8.1")
+    api("org.flywaydb:flyway-sqlserver:12.8.1")
     api("org.junit.jupiter:junit-jupiter:6.1.0")
     api("org.junit.platform:junit-platform-launcher:6.1.0")
     api("org.liquibase:liquibase-core:5.0.3")

@@ -83,6 +83,7 @@ public class FlywayMigrationExecutor {
               .table(historyTable)
               .validateOnMigrate(false)
               .baselineOnMigrate(true)
+              .baselineVersion("0")
               .load();
 
       flyway.migrate();

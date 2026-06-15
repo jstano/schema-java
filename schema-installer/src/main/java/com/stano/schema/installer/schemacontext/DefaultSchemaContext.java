@@ -13,6 +13,10 @@ public class DefaultSchemaContext implements SchemaContext {
 
   protected MigrationServices migrationServices = new MigrationServices();
 
+  public DefaultSchemaContext(URL schemaUrl) {
+    this(schemaUrl, null);
+  }
+
   public DefaultSchemaContext(URL schemaUrl, String migrationScriptLocator) {
     this.schemaUrl = schemaUrl;
     this.migrationScriptLocator = migrationScriptLocator;

@@ -15,6 +15,11 @@ public class FlywaySchemaInstaller extends SchemaInstaller {
   }
 
   @Override
+  protected String getDefaultMigrationScriptLocator() {
+    return "db/migration";
+  }
+
+  @Override
   protected void executeSqlFile(
       Connection connection, DatabaseType databaseType, SchemaContext schemaContext, File sqlFile)
       throws IOException {
