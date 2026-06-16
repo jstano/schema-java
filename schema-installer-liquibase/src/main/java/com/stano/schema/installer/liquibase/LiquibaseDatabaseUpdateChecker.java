@@ -1,17 +1,19 @@
 package com.stano.schema.installer.liquibase;
 
 import java.sql.Connection;
+import java.util.List;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
+import liquibase.changelog.ChangeSet;
 import liquibase.executor.ExecutorService;
 
 public class LiquibaseDatabaseUpdateChecker {
   private LiquibaseFactory liquibaseFactory = new LiquibaseFactory();
 
-  public boolean databaseNeedsUpdating(String changeLogResource, Connection connection) {
+  public List<String> getPendingMigrations(String changeLogResource, Connection connection) {
     try {
-      return databaseNeedsUpdating(
+      return getPendingMigrations(
           liquibaseFactory.createLiquibase(changeLogResource, connection),
           liquibaseFactory.getExecutorService());
     } catch (Exception x) {
@@ -19,9 +21,9 @@ public class LiquibaseDatabaseUpdateChecker {
     }
   }
 
-  public boolean databaseNeedsUpdating(Liquibase liquibase, ExecutorService executorService) {
+  public List<String> getPendingMigrations(Liquibase liquibase, ExecutorService executorService) {
     try {
-      return listUnrunWithChecksumRetry(liquibase);
+      return listUnrunWithChecksumRetry(liquibase).stream().map(ChangeSet::toString).toList();
     } catch (Exception x) {
       throw new LiquibaseRuntimeException(x);
     } finally {
@@ -29,12 +31,12 @@ public class LiquibaseDatabaseUpdateChecker {
     }
   }
 
-  private boolean listUnrunWithChecksumRetry(Liquibase liquibase) throws Exception {
+  private List<ChangeSet> listUnrunWithChecksumRetry(Liquibase liquibase) throws Exception {
     try {
-      return !liquibase.listUnrunChangeSets(new Contexts(), new LabelExpression()).isEmpty();
+      return liquibase.listUnrunChangeSets(new Contexts(), new LabelExpression());
     } catch (Exception x) {
       liquibase.clearCheckSums();
-      return !liquibase.listUnrunChangeSets(new Contexts(), new LabelExpression()).isEmpty();
+      return liquibase.listUnrunChangeSets(new Contexts(), new LabelExpression());
     }
   }
 }

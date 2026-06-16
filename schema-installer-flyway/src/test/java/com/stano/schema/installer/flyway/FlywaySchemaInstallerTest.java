@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -81,5 +82,20 @@ class FlywaySchemaInstallerTest {
   @DisplayName("extends SchemaInstaller")
   void extendsSchemaInstaller() {
     assertInstanceOf(SchemaInstaller.class, installer);
+  }
+
+  @Test
+  @DisplayName("findPendingMigrations delegates to FlywayMigrationExecutor")
+  void findPendingMigrationsDelegatesToFlywayMigrationExecutor() {
+    installer.setFlywayMigrationExecutor(mockExecutor);
+    List<String> expectedPending = List.of("V1__create_test_table.sql", "V2__add_age_column.sql");
+    org.mockito.Mockito.when(
+            mockExecutor.getPendingMigrations(DatabaseType.H2, "db/migration", conn))
+        .thenReturn(expectedPending);
+
+    List<String> result = installer.findPendingMigrations(conn, DatabaseType.H2, "db/migration");
+
+    verify(mockExecutor).getPendingMigrations(DatabaseType.H2, "db/migration", conn);
+    assert result.equals(expectedPending);
   }
 }

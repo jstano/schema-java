@@ -347,7 +347,7 @@ public class MyAppSchemaContext extends DefaultSchemaContext {
 
     @Override
     public ResourceLocator getMigrationScriptLocator(Connection conn) {
-        return new ClasspathResourceLocator("db/migrations");
+        return new ClasspathResourceLocator("db/migration");
     }
 }
 ```
@@ -421,7 +421,7 @@ for (Table table : schema.getTables()) {
         System.out.println("  - " + col.getName() + " : " + col.getType());
     }
     for (Relation rel : table.getRelations()) {
-        System.out.println("  FK: " + rel.getFromColumnName() 
+        System.out.println("  FK: " + rel.getFromColumnName()
             + " -> " + rel.getToTableName() + "." + rel.getToColumnName());
     }
 }

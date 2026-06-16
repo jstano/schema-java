@@ -6,6 +6,7 @@ import com.stano.schema.model.DatabaseType;
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
+import java.util.List;
 import java.util.logging.Logger;
 
 public class LiquibaseSchemaInstaller extends SchemaInstaller {
@@ -13,6 +14,13 @@ public class LiquibaseSchemaInstaller extends SchemaInstaller {
 
   private LiquibaseChangeLogCreator liquibaseChangeLogCreator = new LiquibaseChangeLogCreator();
   private LiquibaseChangeLogExecutor liquibaseChangeLogExecutor = new LiquibaseChangeLogExecutor();
+  private LiquibaseDatabaseUpdateChecker liquibaseDatabaseUpdateChecker =
+      new LiquibaseDatabaseUpdateChecker();
+
+  void setLiquibaseDatabaseUpdateChecker(
+      LiquibaseDatabaseUpdateChecker liquibaseDatabaseUpdateChecker) {
+    this.liquibaseDatabaseUpdateChecker = liquibaseDatabaseUpdateChecker;
+  }
 
   @Override
   protected String getDefaultMigrationScriptLocator() {
@@ -37,6 +45,12 @@ public class LiquibaseSchemaInstaller extends SchemaInstaller {
   protected void executeMigrationScripts(
       Connection connection, DatabaseType databaseType, String locator) {
     liquibaseChangeLogExecutor.executeChangeLog(locator, connection);
+  }
+
+  @Override
+  protected List<String> findPendingMigrations(
+      Connection connection, DatabaseType databaseType, String locator) {
+    return liquibaseDatabaseUpdateChecker.getPendingMigrations(locator, connection);
   }
 
   private File createTempChangeLogFile(

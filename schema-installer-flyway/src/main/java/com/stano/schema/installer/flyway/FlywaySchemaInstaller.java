@@ -6,6 +6,7 @@ import com.stano.schema.model.DatabaseType;
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
+import java.util.List;
 
 public class FlywaySchemaInstaller extends SchemaInstaller {
   private FlywayMigrationExecutor flywayMigrationExecutor = new FlywayMigrationExecutor();
@@ -37,5 +38,11 @@ public class FlywaySchemaInstaller extends SchemaInstaller {
   protected void executeMigrationScripts(
       Connection connection, DatabaseType databaseType, String locator) {
     flywayMigrationExecutor.executeMigrationScripts(databaseType, locator, connection);
+  }
+
+  @Override
+  protected List<String> findPendingMigrations(
+      Connection connection, DatabaseType databaseType, String locator) {
+    return flywayMigrationExecutor.getPendingMigrations(databaseType, locator, connection);
   }
 }

@@ -10,7 +10,10 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.util.Arrays;
+import java.util.List;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationInfo;
 
 public class FlywayMigrationExecutor {
   private FlywayDatabaseUpgradeLog flywayDatabaseUpgradeLog = new FlywayDatabaseUpgradeLog();
@@ -61,7 +64,7 @@ public class FlywayMigrationExecutor {
       DatabaseType databaseType, String locator, Connection connection) {
     executeFlyway(
         databaseType,
-        "classpath:" + locator,
+        normalizeLocation(locator),
         connection,
         "migration",
         "flyway_schema_history_migration");
@@ -76,21 +79,37 @@ public class FlywayMigrationExecutor {
     int logId = flywayDatabaseUpgradeLog.start(databaseType, connection, logName);
 
     try {
-      Flyway flyway =
-          Flyway.configure()
-              .dataSource(new NonClosingConnectionDataSource(connection))
-              .locations(location)
-              .table(historyTable)
-              .validateOnMigrate(false)
-              .baselineOnMigrate(true)
-              .baselineVersion("0")
-              .load();
-
+      Flyway flyway = buildFlyway(location, connection, historyTable);
       flyway.migrate();
-
       flywayDatabaseUpgradeLog.finish(connection, logId, null);
     } catch (Exception x) {
       flywayDatabaseUpgradeLog.finish(connection, logId, getStackTrace(x));
+      throw new FlywayRuntimeException(x);
+    }
+  }
+
+  private Flyway buildFlyway(String location, Connection connection, String historyTable) {
+    return Flyway.configure()
+        .dataSource(new NonClosingConnectionDataSource(connection))
+        .locations(location)
+        .table(historyTable)
+        .validateOnMigrate(false)
+        .baselineOnMigrate(true)
+        .baselineVersion("0")
+        .load();
+  }
+
+  private String normalizeLocation(String locator) {
+    return locator.contains(":") ? locator : "classpath:" + locator;
+  }
+
+  public List<String> getPendingMigrations(
+      DatabaseType databaseType, String locator, Connection connection) {
+    try {
+      Flyway flyway =
+          buildFlyway(normalizeLocation(locator), connection, "flyway_schema_history_migration");
+      return Arrays.stream(flyway.info().pending()).map(MigrationInfo::getScript).toList();
+    } catch (Exception x) {
       throw new FlywayRuntimeException(x);
     }
   }

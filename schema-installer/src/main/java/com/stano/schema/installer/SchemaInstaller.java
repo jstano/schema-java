@@ -93,6 +93,29 @@ public abstract class SchemaInstaller {
     executeMigrationScripts(connection, databaseType, migrationScriptLocator);
   }
 
+  public List<String> getPendingMigrations(DataSource dataSource, SchemaContext schemaContext) {
+    try (Connection connection = dataSource.getConnection()) {
+      return getPendingMigrations(connection, schemaContext);
+    } catch (SQLException x) {
+      throw new SchemaMigrationException(x);
+    }
+  }
+
+  public List<String> getPendingMigrations(Connection connection, SchemaContext schemaContext) {
+    String migrationScriptLocator = schemaContext.getMigrationScriptLocator(connection);
+
+    if (migrationScriptLocator == null) {
+      migrationScriptLocator = getDefaultMigrationScriptLocator();
+    }
+
+    if (migrationScriptLocator == null) {
+      return List.of();
+    }
+
+    DatabaseType databaseType = detectDatabaseType(connection);
+    return findPendingMigrations(connection, databaseType, migrationScriptLocator);
+  }
+
   public void installSql(DataSource dataSource, SchemaContext schemaContext) {
     try {
       try (Connection connection = dataSource.getConnection()) {
@@ -122,6 +145,11 @@ public abstract class SchemaInstaller {
 
   protected void executeMigrationScripts(
       Connection connection, DatabaseType databaseType, String locator) {}
+
+  protected List<String> findPendingMigrations(
+      Connection connection, DatabaseType databaseType, String locator) {
+    return List.of();
+  }
 
   protected abstract void executeSqlFile(
       Connection connection, DatabaseType databaseType, SchemaContext schemaContext, File sqlFile)
