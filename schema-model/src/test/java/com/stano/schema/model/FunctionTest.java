@@ -29,7 +29,7 @@ class FunctionTest {
         Arguments.of(
             "public",
             "fn_total",
-            DatabaseType.POSTGRES,
+            DatabaseType.POSTGRESQL,
             "create function fn_total() returns int as $$ select 1 $$;"),
         Arguments.of(
             "dbo",

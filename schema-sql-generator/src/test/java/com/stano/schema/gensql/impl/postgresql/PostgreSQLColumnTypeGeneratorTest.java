@@ -213,7 +213,7 @@ class PostgreSQLColumnTypeGeneratorTest {
             new SQLGeneratorOptions(
                 schema,
                 null,
-                DatabaseType.POSTGRES,
+                DatabaseType.POSTGRESQL,
                 ForeignKeyMode.RELATIONS,
                 booleanMode,
                 OutputMode.ALL)) {

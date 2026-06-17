@@ -203,7 +203,7 @@ class TableTest {
 
     assertTrue(table.getConstraints().isEmpty());
 
-    Constraint c1 = new Constraint("ck_positive", "amount > 0", DatabaseType.POSTGRES);
+    Constraint c1 = new Constraint("ck_positive", "amount > 0", DatabaseType.POSTGRESQL);
     Constraint c2 = new Constraint("ck_not_null", "col is not null", DatabaseType.SQL_SERVER);
     table.getConstraints().addAll(List.of(c1, c2));
 

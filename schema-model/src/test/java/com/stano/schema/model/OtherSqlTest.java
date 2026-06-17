@@ -31,7 +31,7 @@ class OtherSqlTest {
   private static Stream<Object[]> provideOtherSqlTestCases() {
     return Stream.of(
         new Object[] {
-          DatabaseType.POSTGRES, OtherSqlOrder.TOP, "CREATE EXTENSION IF NOT EXISTS uuid-ossp;"
+          DatabaseType.POSTGRESQL, OtherSqlOrder.TOP, "CREATE EXTENSION IF NOT EXISTS uuid-ossp;"
         },
         new Object[] {DatabaseType.SQL_SERVER, OtherSqlOrder.BOTTOM, "PRINT 'Done';"},
         new Object[] {DatabaseType.H2, OtherSqlOrder.BOTTOM, "-- noop"});
@@ -51,8 +51,8 @@ class OtherSqlTest {
   @DisplayName("Schema should collect OtherSql entries and expose an unmodifiable copy")
   void schemaShouldCollectOtherSqlEntries() throws MalformedURLException {
     Schema schema = new Schema(new URL("https://example.com/schema.json"));
-    OtherSql a = new OtherSql(DatabaseType.POSTGRES, OtherSqlOrder.TOP, "A;");
-    OtherSql b = new OtherSql(DatabaseType.POSTGRES, OtherSqlOrder.BOTTOM, "B;");
+    OtherSql a = new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.TOP, "A;");
+    OtherSql b = new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.BOTTOM, "B;");
 
     schema.addOtherSql(a);
     schema.addOtherSql(b);

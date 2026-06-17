@@ -31,7 +31,7 @@ class ViewTest {
 
   private static Stream<Object[]> provideViewTestCases() {
     return Stream.of(
-        new Object[] {"public", "v_orders", "select * from orders", DatabaseType.POSTGRES},
+        new Object[] {"public", "v_orders", "select * from orders", DatabaseType.POSTGRESQL},
         new Object[] {"dbo", "v_users", "SELECT * FROM dbo.users", DatabaseType.SQL_SERVER});
   }
 
@@ -52,11 +52,11 @@ class ViewTest {
     Schema schema = new Schema(new URL("https://example.com/schema.json"));
 
     schema.addView(new View("public", "sales", "SELECT 1 -- generic", null));
-    schema.addView(new View("public", "sales", "SELECT 1 -- pg", DatabaseType.POSTGRES));
+    schema.addView(new View("public", "sales", "SELECT 1 -- pg", DatabaseType.POSTGRESQL));
     schema.addView(new View("dbo", "sales", "SELECT 1 -- mssql", DatabaseType.SQL_SERVER));
     schema.addView(new View("public", "inventory", "SELECT 2 -- generic", null));
 
-    var pgViews = schema.getViews(DatabaseType.POSTGRES);
+    var pgViews = schema.getViews(DatabaseType.POSTGRESQL);
     var msViews = schema.getViews(DatabaseType.SQL_SERVER);
     var h2Views = schema.getViews(DatabaseType.H2);
 
@@ -84,10 +84,10 @@ class ViewTest {
 
     schema.addView(new View("public", "AView", "A generic", null));
     schema.addView(new View("public", "bview", "B generic", null));
-    schema.addView(new View("public", "aview", "A pg", DatabaseType.POSTGRES));
+    schema.addView(new View("public", "aview", "A pg", DatabaseType.POSTGRESQL));
     schema.addView(new View("public", "CView", "C generic", null));
 
-    var pgViews = schema.getViews(DatabaseType.POSTGRES);
+    var pgViews = schema.getViews(DatabaseType.POSTGRESQL);
     var h2Views = schema.getViews(DatabaseType.H2);
 
     assertEquals(pgViews.stream().map(View::getName).toList(), List.of("aview", "bview", "CView"));
@@ -108,6 +108,6 @@ class ViewTest {
 
     assertThrows(
         UnsupportedOperationException.class,
-        () -> schema.getViews(DatabaseType.POSTGRES).add(new View("public", "x", "y", null)));
+        () -> schema.getViews(DatabaseType.POSTGRESQL).add(new View("public", "x", "y", null)));
   }
 }

@@ -48,7 +48,7 @@ class GenSQLTest {
               var options = (SQLGeneratorOptions) inv.getArgument(0);
               if (options.getSchema() == mockSchema
                   && options.getSqlWriter() == mockWriter
-                  && options.getDatabaseType() == DatabaseType.POSTGRES
+                  && options.getDatabaseType() == DatabaseType.POSTGRESQL
                   && options.getForeignKeyMode() == ForeignKeyMode.RELATIONS
                   && options.getBooleanMode() == BooleanMode.NATIVE
                   && options.getOutputMode() == OutputMode.ALL
@@ -62,7 +62,7 @@ class GenSQLTest {
     genSql.sqlGeneratorFactory = mockSQLGeneratorFactory;
 
     genSql.generateSQL(
-        DatabaseType.POSTGRES,
+        DatabaseType.POSTGRESQL,
         mockSchema,
         mockWriter,
         ForeignKeyMode.RELATIONS,
@@ -93,7 +93,7 @@ class GenSQLTest {
               var options = (SQLGeneratorOptions) inv.getArgument(0);
               if (options.getSchema() == mockSchema
                   && options.getSqlWriter() == mockWriter
-                  && options.getDatabaseType() == DatabaseType.POSTGRES
+                  && options.getDatabaseType() == DatabaseType.POSTGRESQL
                   && options.getForeignKeyMode() == ForeignKeyMode.RELATIONS
                   && options.getBooleanMode() == BooleanMode.NATIVE
                   && options.getOutputMode() == OutputMode.ALL
@@ -107,7 +107,7 @@ class GenSQLTest {
     genSql.sqlGeneratorFactory = mockSQLGeneratorFactory;
 
     genSql.generateSQL(
-        DatabaseType.POSTGRES,
+        DatabaseType.POSTGRESQL,
         mockSchema,
         mockWriter,
         ForeignKeyMode.RELATIONS,
@@ -136,13 +136,13 @@ class GenSQLTest {
               var options = (SQLGeneratorOptions) inv.getArgument(0);
               if (options.getSchema() == mockSchema
                   && options.getSqlWriter() == mockWriter
-                  && options.getDatabaseType() == DatabaseType.POSTGRES
+                  && options.getDatabaseType() == DatabaseType.POSTGRESQL
                   && options.getForeignKeyMode() == ForeignKeyMode.RELATIONS
                   && options.getBooleanMode() == BooleanMode.NATIVE
                   && options.getOutputMode() == OutputMode.ALL
                   && options
                       .getStatementSeparator()
-                      .equals(DatabaseType.POSTGRES.getStatementSeparator())) {
+                      .equals(DatabaseType.POSTGRESQL.getStatementSeparator())) {
                 return mockSQLGenerator;
               }
               return null;
@@ -152,7 +152,7 @@ class GenSQLTest {
     genSql.sqlGeneratorFactory = mockSQLGeneratorFactory;
 
     genSql.generateSQL(
-        DatabaseType.POSTGRES,
+        DatabaseType.POSTGRESQL,
         mockSchema,
         mockWriter,
         ForeignKeyMode.RELATIONS,
@@ -179,7 +179,7 @@ class GenSQLTest {
               var options = (SQLGeneratorOptions) inv.getArgument(0);
               if (options.getSchema() == mockSchema
                   && options.getSqlWriter() == mockWriter
-                  && options.getDatabaseType() == DatabaseType.POSTGRES
+                  && options.getDatabaseType() == DatabaseType.POSTGRESQL
                   && options.getForeignKeyMode() == ForeignKeyMode.RELATIONS
                   && options.getBooleanMode() == BooleanMode.NATIVE
                   && options.getOutputMode() == OutputMode.ALL
@@ -194,7 +194,7 @@ class GenSQLTest {
     genSql.sqlGeneratorFactory = mockSQLGeneratorFactory;
 
     genSql.generateSQL(
-        DatabaseType.POSTGRES,
+        DatabaseType.POSTGRESQL,
         mockSchema,
         mockWriter,
         ForeignKeyMode.RELATIONS,

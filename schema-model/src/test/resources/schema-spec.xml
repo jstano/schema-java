@@ -4427,7 +4427,7 @@ END;
          <delete databaseType="sqlserver">
             update EmployeeProductivityConfig set Ratio = null where KBI2ID is null;
          </delete>
-         <delete databaseType="postgres">
+         <delete databaseType="postgresql">
             update EmployeeProductivityConfig set Ratio = null where KBI2ID is null;
          </delete>
       </triggers>
@@ -13821,7 +13821,7 @@ END;
    ]]>
    </view>
 
-   <view name="AssignmentHierarchy" databaseType="postgres">
+   <view name="AssignmentHierarchy" databaseType="postgresql">
       <![CDATA[
    with recursive ah as
    (
@@ -13874,7 +13874,7 @@ END;
    ]]>
    </view>
 
-   <view name="InheritedAssignmentPlannerSettingsQuery" databaseType="postgres">
+   <view name="InheritedAssignmentPlannerSettingsQuery" databaseType="postgresql">
       <![CDATA[
    with recursive ap as (
    select
@@ -13996,7 +13996,7 @@ END;
    ]]>
    </view>
 
-   <view name="Requirement" databaseType="postgres">
+   <view name="Requirement" databaseType="postgresql">
       <![CDATA[
       with RequirementSupport as
       (
@@ -14047,7 +14047,7 @@ END;
    ]]>
    </view>
 
-   <view name="BudgetLineLoadQuery" databaseType="postgres">
+   <view name="BudgetLineLoadQuery" databaseType="postgresql">
       <![CDATA[
       select b.ID as LineID, b.Description as LineDescription, b.Code as LineCode, b.PropertyID as PropertyID, b.ParentLineID,b.OrderNo,
          b.GlobalOrderNo, b.LineTypeCode, b.Operation, b.AllocationType,b.FactorMode, b.KBIID, b.JobclassID,b.AccountID,b.UnitAccountID,b.OTCostAccountID,b.OTHoursAccountID,
@@ -14145,7 +14145,7 @@ END;
    ]]>
    </view>
 
-   <view name="DivDptJobEmpQuery" databaseType="postgres">
+   <view name="DivDptJobEmpQuery" databaseType="postgresql">
       <![CDATA[
    select dv.ID as DivisionID, dv.Name as DivisionName,
           dpt.id as DepartmentID, dpt.Name as DepartmentName,
@@ -14359,7 +14359,7 @@ END;
       ]]>
    </view>
 
-   <view name="RequirementQuery" databaseType="postgres">
+   <view name="RequirementQuery" databaseType="postgresql">
       <![CDATA[
       SELECT Requirement.JobclassID,Requirement.RequirementDate,Requirement.RequirementCode,Requirement.StartTime,Requirement.EndTime,Requirement.Duration,Requirement.NumberShifts,
              Requirement.ForecastHours,Requirement.AssignmentID,Department.ID as DepartmentID,Department.ParentAssignmentID as DivisionID,Requirement.PropertyID
@@ -14471,7 +14471,7 @@ END;
    ]]>
    </view>
 
-   <view name="EmployeeHRQuery" databaseType="postgres">
+   <view name="EmployeeHRQuery" databaseType="postgresql">
       <![CDATA[
       select
          Employee.PropertyID, cast(case when StatusTypeCode = 'A' or StatusTypeCode = 'R' or StatusTypeCode = 'L' or (StatusTypeCode = 'T' and CURRENT_DATE = EmployeeStatus.StartDate) then 'Y' else 'N' end as char(1)) as Active, Employee.ID, EmpID, Employee.Name,
@@ -14516,7 +14516,7 @@ END;
    ]]>
    </view>
 
-   <view name="EmployeeHRAllJobsQuery" databaseType="postgres">
+   <view name="EmployeeHRAllJobsQuery" databaseType="postgresql">
       <![CDATA[
       select
          EmployeeHRQuery.*, Job.ID as JobClassID, Job.Name as JobClassName, Job.Code as JobClassCode,
@@ -14561,7 +14561,7 @@ END;
    ]]>
    </view>
 
-   <view name="EligibleHoursQuery" databaseType="postgres">
+   <view name="EligibleHoursQuery" databaseType="postgresql">
       <![CDATA[
       select
          Employee.ID as EmployeeID, EmployeeShift.JobID as JobclassID, ShiftDate as EarningDate, coalesce(RegHours, 0) as RegHours, coalesce(OTHours, 0) as OTHours,
@@ -14624,7 +14624,7 @@ END;
    ]]>
    </view>
 
-   <view name="AllHoursQuery" databaseType="postgres">
+   <view name="AllHoursQuery" databaseType="postgresql">
       <![CDATA[
       select
          Employee.ID as EmployeeID, EmployeeShift.JobID as JobClassID, ShiftDate as EarningDate, coalesce(RegHours, 0) as RegHours, coalesce(OTHours, 0) as OTHours,
@@ -14759,7 +14759,7 @@ END;
    ]]>
    </view>
 
-   <view name="DivRequirementSummaryQuery" databaseType="postgres">
+   <view name="DivRequirementSummaryQuery" databaseType="postgresql">
       <![CDATA[
    select DivisionID, RequirementDate, RequirementCode, sum(ForecastHours) as ForecastHours,PropertyID
    from RequirementQuery
@@ -14775,7 +14775,7 @@ END;
    ]]>
    </view>
 
-   <view name="DptRequirementSummaryQuery" databaseType="postgres">
+   <view name="DptRequirementSummaryQuery" databaseType="postgresql">
       <![CDATA[
    select DepartmentID, RequirementDate, RequirementCode, sum(ForecastHours) as ForecastHours,PropertyID
    from RequirementQuery
@@ -14791,7 +14791,7 @@ END;
    ]]>
    </view>
 
-   <view name="JobRequirementSummaryQuery" databaseType="postgres">
+   <view name="JobRequirementSummaryQuery" databaseType="postgresql">
       <![CDATA[
    select JobclassID, RequirementDate, RequirementCode, sum(ForecastHours) as ForecastHours,PropertyID
    from RequirementQuery
@@ -14854,7 +14854,7 @@ END;
    ]]>
    </view>
 
-   <view name="ForecastJobSummaryQuery" databaseType="postgres">
+   <view name="ForecastJobSummaryQuery" databaseType="postgresql">
       <![CDATA[
    SELECT
       JobclassID,RequirementDate AS StatDate,sum(ForecastHours) AS ForecastHours,PropertyID
@@ -14916,7 +14916,7 @@ END;
    ]]>
    </view>
 
-   <view name="StandardJobSummaryQuery" databaseType="postgres">
+   <view name="StandardJobSummaryQuery" databaseType="postgresql">
       <![CDATA[
       SELECT
          JobclassID,RequirementDate AS StatDate,sum(ForecastHours) AS StandardHours,PropertyID
@@ -14962,7 +14962,7 @@ END;
    ]]>
    </view>
 
-   <view name="EmployeeShiftPunchesQuery" databaseType="postgres">
+   <view name="EmployeeShiftPunchesQuery" databaseType="postgresql">
       <![CDATA[
    select
       esp.*, t.radius, MetersBetweenGeoLocations(esp.latitude, esp.longitude, t.latitude, t.longitude) as PunchDistanceFromClock
@@ -14979,7 +14979,7 @@ END;
    ]]>
    </view>
 
-   <view name="WatsonTaskQuery" databaseType="postgres">
+   <view name="WatsonTaskQuery" databaseType="postgresql">
       <![CDATA[
    select ID, PropertyID, TaskName, ReferenceDate, StartDateTime, EndDateTime, CompletedBy, Complete, TaskNotes,
           StackTrace, Row_Number() over (partition by TaskName order by StartDateTime desc) as RecordNumber
@@ -14999,7 +14999,7 @@ END;
    ]]>
    </view>
 
-   <view name="JobStatusQuery" databaseType="postgres">
+   <view name="JobStatusQuery" databaseType="postgresql">
       <![CDATA[
    select
       Employee.PropertyID, EmployeeID, StartDate, EndDate, count(*) as JobCount,
@@ -15022,7 +15022,7 @@ END;
    ]]>
    </view>
 
-   <view name="JobStatusSummaryQuery" databaseType="postgres">
+   <view name="JobStatusSummaryQuery" databaseType="postgresql">
       <![CDATA[
    select ESSV.EmployeeID, JSV.StartDate, max(JSV.EndDate) as EndDate, MAX(JSV.JobCount) as JobCount, MAX(JSV.Setnumber) as SetNumber, sum(case when ESSV.SetJobID is null then 1 else 0 end) as InvalidShiftCount
    , sum(case when ESSV.SetJobID is not null and ESSV.ShiftTypeCode = 'A' then 1 else 0 end) as ValidAShiftCount
@@ -15147,7 +15147,7 @@ END;
    ]]>
    </view>
 
-   <view name="ActualShiftPunchQuery" databaseType="postgres">
+   <view name="ActualShiftPunchQuery" databaseType="postgresql">
       <![CDATA[
       WITH Ranking AS
       (
@@ -15177,7 +15177,7 @@ END;
    ]]>
    </view>
 
-   <view name="AdjustedShiftPunchQuery" databaseType="postgres">
+   <view name="AdjustedShiftPunchQuery" databaseType="postgresql">
       <![CDATA[
       WITH Ranking AS
       (
@@ -15235,7 +15235,7 @@ END;
    ]]>
    </view>
 
-   <view name="RoundedShiftPunchQuery" databaseType="postgres">
+   <view name="RoundedShiftPunchQuery" databaseType="postgresql">
       <![CDATA[
       WITH Ranking AS
       (
@@ -15333,7 +15333,7 @@ END;
    ]]>
    </view>
 
-   <view name="ActualShiftPunchQuery" databaseType="postgres">
+   <view name="ActualShiftPunchQuery" databaseType="postgresql">
       <![CDATA[
       WITH Ranking AS
       (
@@ -15363,7 +15363,7 @@ END;
    ]]>
    </view>
 
-   <view name="AdjustedShiftPunchQuery" databaseType="postgres">
+   <view name="AdjustedShiftPunchQuery" databaseType="postgresql">
       <![CDATA[
       WITH Ranking AS
       (
@@ -15393,7 +15393,7 @@ END;
    ]]>
    </view>
 
-   <view name="RoundedShiftPunchQuery" databaseType="postgres">
+   <view name="RoundedShiftPunchQuery" databaseType="postgresql">
       <![CDATA[
       WITH Ranking AS
       (
@@ -15520,7 +15520,7 @@ END;
    ]]>
    </view>
 
-   <view name="WatsonActionSecurityQuery" databaseType="postgres">
+   <view name="WatsonActionSecurityQuery" databaseType="postgresql">
       <![CDATA[
    with groupAccess as
    (
@@ -15695,7 +15695,7 @@ END;
    ]]>
    </view>
 
-   <view name="BudgetKBIStatQuery" databaseType="postgres">
+   <view name="BudgetKBIStatQuery" databaseType="postgresql">
       <![CDATA[
       create view BudgetKBIStatQuery as
       select
@@ -15847,7 +15847,7 @@ END;
    ]]>
    </view>
 
-   <view name="BudgetDailyJobDataQuery" databaseType="postgres">
+   <view name="BudgetDailyJobDataQuery" databaseType="postgresql">
       <![CDATA[
       with dailyPercentWithError as
       (
@@ -15917,7 +15917,7 @@ END;
    ]]>
    </view>
 
-   <view name="BudgetDailyDataQuery" databaseType="postgres">
+   <view name="BudgetDailyDataQuery" databaseType="postgresql">
       <![CDATA[
 		select * from BudgetDailyJobDataQuery
 		union
@@ -15937,7 +15937,7 @@ END;
    ]]>
    </view>
 
-   <view name="BudgetStaffStatQuery" databaseType="postgres">
+   <view name="BudgetStaffStatQuery" databaseType="postgresql">
       <![CDATA[
       select
          b.ID, b.PropertyID, b.StatDate, year(b.StatDate) as [year], f.PeriodNumber, f.ID as PeriodID,
@@ -16038,7 +16038,7 @@ END;
    ]]>
    </view>
 
-   <view name="BudgetLineHierarchyQuery" databaseType="postgres">
+   <view name="BudgetLineHierarchyQuery" databaseType="postgresql">
       <![CDATA[
 		SELECT BL1.ID, BL1.PropertyID, BL1.MasterBudgetLineID, BL9.ParentLineID as Lvl1, BL8.ParentLineID as Lvl2, BL7.ParentLineID as Lvl3, BL6.ParentLineID as Lvl4, BL5.ParentLineID as Lvl5, BL4.ParentLineID as Lvl6, BL3.ParentLineID as Lvl7, BL2.ParentLineID as Lvl8, BL1.ParentLineID as Lvl9, BL1.ID as Lvl10
 		FROM BudgetLine BL1, BudgetLine BL2, BudgetLine BL3, BudgetLine BL4, BudgetLine BL5, BudgetLine BL6, BudgetLine BL7, BudgetLine BL8, BudgetLine BL9, BudgetLine BL10
@@ -16216,7 +16216,7 @@ END;
    ]]>
    </view>
 
-   <view name="MasterBudgetLineHierarchyQuery" databaseType="postgres">
+   <view name="MasterBudgetLineHierarchyQuery" databaseType="postgresql">
       <![CDATA[
 		SELECT BL1.ID, BL9.ParentLineID as Lvl1, BL8.ParentLineID as Lvl2, BL7.ParentLineID as Lvl3, BL6.ParentLineID as Lvl4, BL5.ParentLineID as Lvl5, BL4.ParentLineID as Lvl6, BL3.ParentLineID as Lvl7, BL2.ParentLineID as Lvl8, BL1.ParentLineID as Lvl9, BL1.ID as Lvl10
 		FROM MasterBudgetLine BL1, MasterBudgetLine BL2, MasterBudgetLine BL3, MasterBudgetLine BL4, MasterBudgetLine BL5, MasterBudgetLine BL6, MasterBudgetLine BL7, MasterBudgetLine BL8, MasterBudgetLine BL9, MasterBudgetLine BL10
@@ -16330,7 +16330,7 @@ END;
    ]]>
    </view>
 
-   <view name="OpCodeJobClassQuery" databaseType="postgres">
+   <view name="OpCodeJobClassQuery" databaseType="postgresql">
       <![CDATA[
       SELECT ocjc.ID, ocjc.OpCodeID, ddjq.PropertyID, ddjq.PropertyName, ddjq.PropertyCode, ddjq.DivisionID, ddjq.DivisionAssignmentID,
       ddjq.DivisionName, ddjq.DivisionCode, ddjq.DepartmentID, ddjq.DepartmentAssignmentID, ddjq.DepartmentName, ddjq.DepartmentCode,
@@ -16973,7 +16973,7 @@ END;
       </procedure>
    </customSQL>
 
-   <customSQL databaseType="postgres">
+   <customSQL databaseType="postgresql">
       <function name="DateDiff">
          <![CDATA[
          CREATE OR REPLACE FUNCTION DateDiff (units VARCHAR(30), start_t TIMESTAMP, end_t TIMESTAMP)

@@ -154,7 +154,7 @@ public class PostgreSQLUpdateTriggerGenerator extends BaseGenerator {
 
     if (!table.getTriggers().isEmpty()) {
       for (Trigger trigger : table.getTriggers()) {
-        if (trigger.getDatabaseType() == DatabaseType.POSTGRES
+        if (trigger.getDatabaseType() == DatabaseType.POSTGRESQL
             && trigger.getTriggerType() == TriggerType.UPDATE) {
           sqlWriter.println(trigger.getTriggerText());
         }

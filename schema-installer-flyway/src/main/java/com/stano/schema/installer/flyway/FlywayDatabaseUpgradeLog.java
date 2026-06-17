@@ -112,7 +112,7 @@ public class FlywayDatabaseUpgradeLog {
           "create table dbo.databaseupgradelog (ID integer identity(1,1) not null,StartDateTime"
               + " datetime not null,EndDateTime datetime,ChangeLogName varchar(max),Error"
               + " varchar(max),constraint pk_databaseupgradelog primary key (ID))"; // NON-NLS
-      case POSTGRES ->
+      case POSTGRESQL ->
           "create table databaseupgradelog (ID serial not null,StartDateTime timestamp not"
               + " null,EndDateTime timestamp,ChangeLogName text,Error text,constraint"
               + " pk_databaseupgradelog primary key (ID))"; // NON-NLS

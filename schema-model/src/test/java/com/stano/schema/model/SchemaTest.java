@@ -113,10 +113,10 @@ class SchemaTest {
   void getViewsReturnsUnmodifiableList() throws MalformedURLException {
     Schema schema = new Schema(new URL("https://example.com/schema.json"));
     schema.addView(new View("public", "A", "ga", null));
-    schema.addView(new View("public", "a", "pg", DatabaseType.POSTGRES));
+    schema.addView(new View("public", "a", "pg", DatabaseType.POSTGRESQL));
     schema.addView(new View("public", "B", "gb", null));
 
-    var pgViews = schema.getViews(DatabaseType.POSTGRES);
+    var pgViews = schema.getViews(DatabaseType.POSTGRESQL);
     var h2Views = schema.getViews(DatabaseType.H2);
 
     assertEquals(pgViews.stream().map(View::getName).toList(), List.of("a", "B"));
@@ -131,10 +131,10 @@ class SchemaTest {
   void getViewsPrefersDBSpecificOverGeneric() throws MalformedURLException {
     Schema schema = new Schema(new URL("https://example.com/schema.json"));
     schema.addView(new View("public", "sales", "generic", null));
-    schema.addView(new View("public", "sales", "pgsql", DatabaseType.POSTGRES));
+    schema.addView(new View("public", "sales", "pgsql", DatabaseType.POSTGRESQL));
     schema.addView(new View("public", "sales", "mssql", DatabaseType.SQL_SERVER));
 
-    var pg = schema.getViews(DatabaseType.POSTGRES);
+    var pg = schema.getViews(DatabaseType.POSTGRESQL);
     var ms = schema.getViews(DatabaseType.SQL_SERVER);
     var h2 = schema.getViews(DatabaseType.H2);
 

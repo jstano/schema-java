@@ -43,7 +43,7 @@ class TriggerTypeTest {
   @Test
   @DisplayName("can be used in Trigger without errors")
   void testTriggerIntegration() {
-    Trigger tUpd = new Trigger("AFTER UPDATE ON t", TriggerType.UPDATE, DatabaseType.POSTGRES);
+    Trigger tUpd = new Trigger("AFTER UPDATE ON t", TriggerType.UPDATE, DatabaseType.POSTGRESQL);
     Trigger tDel = new Trigger("BEFORE DELETE ON t", TriggerType.DELETE, DatabaseType.SQL_SERVER);
 
     assertEquals(TriggerType.UPDATE, tUpd.getTriggerType());

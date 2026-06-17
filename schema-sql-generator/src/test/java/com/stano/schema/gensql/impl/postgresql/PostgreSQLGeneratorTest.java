@@ -36,7 +36,7 @@ class PostgreSQLGeneratorTest {
             new SQLGeneratorOptions(
                 schema,
                 new PrintWriter(sw),
-                DatabaseType.POSTGRES,
+                DatabaseType.POSTGRESQL,
                 fkMode,
                 boolMode,
                 OutputMode.ALL))

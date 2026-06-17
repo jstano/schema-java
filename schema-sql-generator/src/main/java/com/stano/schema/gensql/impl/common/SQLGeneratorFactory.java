@@ -15,7 +15,7 @@ public class SQLGeneratorFactory {
       switch (databaseType) {
         case H2:
           return new H2Generator(sqlGeneratorOptions);
-        case POSTGRES:
+        case POSTGRESQL:
           return new PostgreSQLGenerator(sqlGeneratorOptions);
         case SQL_SERVER:
           return new SQLServerGenerator(sqlGeneratorOptions);

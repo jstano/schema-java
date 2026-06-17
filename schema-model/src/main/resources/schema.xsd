@@ -363,7 +363,7 @@
     <restriction base="string">
       <enumeration value="h2"/>
       <enumeration value="mysql"/>
-      <enumeration value="postgres"/>
+      <enumeration value="postgresql"/>
       <enumeration value="sqlite"/>
       <enumeration value="sqlserver"/>
     </restriction>

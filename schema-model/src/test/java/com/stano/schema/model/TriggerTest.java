@@ -29,7 +29,7 @@ class TriggerTest {
 
   private static Stream<Object[]> provideTriggerTestCases() {
     return Stream.of(
-        new Object[] {"AFTER UPDATE SET x=1", TriggerType.UPDATE, DatabaseType.POSTGRES},
+        new Object[] {"AFTER UPDATE SET x=1", TriggerType.UPDATE, DatabaseType.POSTGRESQL},
         new Object[] {"BEFORE DELETE FROM t", TriggerType.DELETE, DatabaseType.SQL_SERVER},
         new Object[] {"DROP TRIGGER IF EXISTS", TriggerType.DELETE, DatabaseType.H2});
   }
@@ -54,17 +54,17 @@ class TriggerTest {
 
     table
         .getTriggers()
-        .add(new Trigger("AFTER UPDATE ON orders", TriggerType.UPDATE, DatabaseType.POSTGRES));
+        .add(new Trigger("AFTER UPDATE ON orders", TriggerType.UPDATE, DatabaseType.POSTGRESQL));
     table
         .getTriggers()
-        .add(new Trigger("BEFORE DELETE ON orders", TriggerType.DELETE, DatabaseType.POSTGRES));
+        .add(new Trigger("BEFORE DELETE ON orders", TriggerType.DELETE, DatabaseType.POSTGRESQL));
 
     assertEquals(
         table.getTriggers().stream().map(Trigger::getTriggerType).toList(),
         List.of(TriggerType.UPDATE, TriggerType.DELETE));
     assertEquals(
         table.getTriggers().stream().map(Trigger::getDatabaseType).toList(),
-        List.of(DatabaseType.POSTGRES, DatabaseType.POSTGRES));
+        List.of(DatabaseType.POSTGRESQL, DatabaseType.POSTGRESQL));
 
     table.getTriggers().remove(0);
 

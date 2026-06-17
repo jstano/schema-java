@@ -28,7 +28,7 @@ class InitialDataTest {
 
   static Stream<Arguments> constructorProvider() {
     return Stream.of(
-        Arguments.of("insert into t(a) values (1)", DatabaseType.POSTGRES),
+        Arguments.of("insert into t(a) values (1)", DatabaseType.POSTGRESQL),
         Arguments.of("INSERT INTO t(a) VALUES (42);", DatabaseType.SQL_SERVER));
   }
 
@@ -51,10 +51,10 @@ class InitialDataTest {
 
     table
         .getInitialData()
-        .add(new InitialData("insert into orders(id) values (1)", DatabaseType.POSTGRES));
+        .add(new InitialData("insert into orders(id) values (1)", DatabaseType.POSTGRESQL));
     table
         .getInitialData()
-        .add(new InitialData("insert into orders(id) values (2)", DatabaseType.POSTGRES));
+        .add(new InitialData("insert into orders(id) values (2)", DatabaseType.POSTGRESQL));
 
     List<InitialData> data = table.getInitialData();
     assertEquals(2, data.size());

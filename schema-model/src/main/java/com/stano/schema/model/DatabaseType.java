@@ -5,7 +5,7 @@ import java.util.Set;
 
 public enum DatabaseType {
   H2(";", 64, false),
-  POSTGRES(";", 63, true),
+  POSTGRESQL(";", 63, true),
   SQL_SERVER("\nGO", 32, true);
 
   public static Set<DatabaseType> getDatabaseTypes(String targetDatabasesStr) {
@@ -45,6 +45,11 @@ public enum DatabaseType {
 
     if (databaseType.trim().equalsIgnoreCase("sqlserver")) {
       return SQL_SERVER;
+    }
+
+    if (databaseType.trim().equalsIgnoreCase("postgres")
+        || databaseType.trim().equalsIgnoreCase("postgresql")) {
+      return POSTGRESQL;
     }
 
     return valueOf(databaseType.toUpperCase());

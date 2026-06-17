@@ -30,7 +30,8 @@ class DatabaseTypeTest {
         Arguments.of(null, new HashSet<>()),
         Arguments.of("", new HashSet<>()),
         Arguments.of("sqlserver", Set.of(DatabaseType.SQL_SERVER)),
-        Arguments.of("sqlserver,POSTGRES", Set.of(DatabaseType.SQL_SERVER, DatabaseType.POSTGRES)));
+        Arguments.of(
+            "sqlserver,POSTGRESQL", Set.of(DatabaseType.SQL_SERVER, DatabaseType.POSTGRESQL)));
   }
 
   @ParameterizedTest
@@ -43,7 +44,7 @@ class DatabaseTypeTest {
   static Stream<Arguments> getMaxKeyNameLengthProvider() {
     return Stream.of(
         Arguments.of(DatabaseType.H2, 64),
-        Arguments.of(DatabaseType.POSTGRES, 63),
+        Arguments.of(DatabaseType.POSTGRESQL, 63),
         Arguments.of(DatabaseType.SQL_SERVER, 32));
   }
 
@@ -57,7 +58,7 @@ class DatabaseTypeTest {
   static Stream<Arguments> getStatementSeparatorProvider() {
     return Stream.of(
         Arguments.of(DatabaseType.H2, ";"),
-        Arguments.of(DatabaseType.POSTGRES, ";"),
+        Arguments.of(DatabaseType.POSTGRESQL, ";"),
         Arguments.of(DatabaseType.SQL_SERVER, "\nGO"));
   }
 
@@ -71,7 +72,7 @@ class DatabaseTypeTest {
   static Stream<Arguments> supportsTriggerProvider() {
     return Stream.of(
         Arguments.of(DatabaseType.H2, false),
-        Arguments.of(DatabaseType.POSTGRES, true),
+        Arguments.of(DatabaseType.POSTGRESQL, true),
         Arguments.of(DatabaseType.SQL_SERVER, true));
   }
 

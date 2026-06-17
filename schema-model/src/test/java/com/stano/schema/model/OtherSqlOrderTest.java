@@ -43,7 +43,7 @@ class OtherSqlOrderTest {
   @Test
   @DisplayName("integration: OtherSql should retain the provided OtherSqlOrder")
   void testOtherSqlIntegration() {
-    OtherSql top = new OtherSql(DatabaseType.POSTGRES, OtherSqlOrder.TOP, "A;");
+    OtherSql top = new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.TOP, "A;");
     OtherSql bottom = new OtherSql(DatabaseType.SQL_SERVER, OtherSqlOrder.BOTTOM, "B;");
 
     assertEquals(OtherSqlOrder.TOP, top.getOrder());

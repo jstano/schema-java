@@ -24,7 +24,7 @@ public abstract class SchemaInstaller {
   protected static DatabaseType detectDatabaseType(Connection connection) {
     try {
       String url = connection.getMetaData().getURL().toLowerCase();
-      if (url.startsWith("jdbc:postgresql")) return DatabaseType.POSTGRES;
+      if (url.startsWith("jdbc:postgresql")) return DatabaseType.POSTGRESQL;
       if (url.startsWith("jdbc:sqlserver")) return DatabaseType.SQL_SERVER;
       if (url.startsWith("jdbc:h2")) return DatabaseType.H2;
       throw new IllegalArgumentException("Unsupported JDBC URL: " + url);

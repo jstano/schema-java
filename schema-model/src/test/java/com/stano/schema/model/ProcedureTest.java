@@ -29,7 +29,7 @@ class ProcedureTest {
         Arguments.of(
             "public",
             "pr_total",
-            DatabaseType.POSTGRES,
+            DatabaseType.POSTGRESQL,
             "create procedure pr_total() language plpgsql as $$ begin /* noop */ end $$;"),
         Arguments.of(
             "dbo",

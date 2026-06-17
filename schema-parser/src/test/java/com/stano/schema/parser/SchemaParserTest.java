@@ -55,7 +55,7 @@ class SchemaParserTest {
     assertEquals(schema.getViews().get(2).getSchemaName(), "public");
     assertEquals(schema.getViews().get(2).getName(), "TestView2");
     assertEquals(schema.getViews().get(2).getSql(), "select * from pgsql");
-    assertEquals(schema.getViews().get(2).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(schema.getViews().get(2).getDatabaseType(), DatabaseType.POSTGRESQL);
 
     assertEquals(schema.getViews().get(3).getSchemaName(), "public");
     assertEquals(schema.getViews().get(3).getName(), "TestView2");
@@ -79,16 +79,16 @@ class SchemaParserTest {
     assertEquals(schema.getEnumType("TestEnumType").getValues().get(1).getCode(), "2");
 
     assertEquals(schema.getOtherSql().size(), 8);
-    assertEquals(schema.getOtherSql().get(0).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(schema.getOtherSql().get(0).getDatabaseType(), DatabaseType.POSTGRESQL);
     assertEquals(schema.getOtherSql().get(0).getOrder(), OtherSqlOrder.TOP);
     assertEquals(schema.getOtherSql().get(0).getSql(), "other top sql for pgsql 1");
-    assertEquals(schema.getOtherSql().get(1).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(schema.getOtherSql().get(1).getDatabaseType(), DatabaseType.POSTGRESQL);
     assertEquals(schema.getOtherSql().get(1).getOrder(), OtherSqlOrder.TOP);
     assertEquals(schema.getOtherSql().get(1).getSql(), "other top sql for pgsql 2");
-    assertEquals(schema.getOtherSql().get(2).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(schema.getOtherSql().get(2).getDatabaseType(), DatabaseType.POSTGRESQL);
     assertEquals(schema.getOtherSql().get(2).getOrder(), OtherSqlOrder.BOTTOM);
     assertEquals(schema.getOtherSql().get(2).getSql(), "other bottom sql for pgsql 1");
-    assertEquals(schema.getOtherSql().get(3).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(schema.getOtherSql().get(3).getDatabaseType(), DatabaseType.POSTGRESQL);
     assertEquals(schema.getOtherSql().get(3).getOrder(), OtherSqlOrder.BOTTOM);
     assertEquals(schema.getOtherSql().get(3).getSql(), "other bottom sql for pgsql 2");
     assertEquals(schema.getOtherSql().get(4).getDatabaseType(), DatabaseType.SQL_SERVER);
@@ -215,13 +215,13 @@ class SchemaParserTest {
         "insert into ParentTable (Name,Extra,Gender) values ('MSSQL','Extra MSSQL','F')");
 
     assertEquals(parentTable.getTriggers().size(), 4);
-    assertEquals(parentTable.getTriggers().get(0).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(parentTable.getTriggers().get(0).getDatabaseType(), DatabaseType.POSTGRESQL);
     assertEquals(parentTable.getTriggers().get(0).getTriggerType(), TriggerType.DELETE);
     assertEquals(parentTable.getTriggers().get(0).getTriggerText(), "delete from pgsql");
     assertEquals(parentTable.getTriggers().get(1).getDatabaseType(), DatabaseType.SQL_SERVER);
     assertEquals(parentTable.getTriggers().get(1).getTriggerType(), TriggerType.DELETE);
     assertEquals(parentTable.getTriggers().get(1).getTriggerText(), "delete from mssql");
-    assertEquals(parentTable.getTriggers().get(2).getDatabaseType(), DatabaseType.POSTGRES);
+    assertEquals(parentTable.getTriggers().get(2).getDatabaseType(), DatabaseType.POSTGRESQL);
     assertEquals(parentTable.getTriggers().get(2).getTriggerType(), TriggerType.UPDATE);
     assertEquals(parentTable.getTriggers().get(2).getTriggerText(), "update pgsql");
     assertEquals(parentTable.getTriggers().get(3).getDatabaseType(), DatabaseType.SQL_SERVER);

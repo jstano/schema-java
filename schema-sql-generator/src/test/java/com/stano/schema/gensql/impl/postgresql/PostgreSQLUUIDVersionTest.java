@@ -35,7 +35,7 @@ class PostgreSQLUUIDVersionTest {
             new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
                 schema,
                 pw,
-                DatabaseType.POSTGRES,
+                DatabaseType.POSTGRESQL,
                 ForeignKeyMode.RELATIONS,
                 BooleanMode.NATIVE,
                 OutputMode.ALL,
@@ -68,7 +68,7 @@ class PostgreSQLUUIDVersionTest {
             new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
                 schema,
                 pw,
-                DatabaseType.POSTGRES,
+                DatabaseType.POSTGRESQL,
                 ForeignKeyMode.RELATIONS,
                 BooleanMode.NATIVE,
                 OutputMode.ALL,
@@ -99,7 +99,7 @@ class PostgreSQLUUIDVersionTest {
         new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
             null,
             null,
-            DatabaseType.POSTGRES,
+            DatabaseType.POSTGRESQL,
             ForeignKeyMode.RELATIONS,
             BooleanMode.NATIVE,
             OutputMode.ALL,
@@ -163,7 +163,7 @@ class PostgreSQLUUIDVersionTest {
             new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
                 schema,
                 pw,
-                DatabaseType.POSTGRES,
+                DatabaseType.POSTGRESQL,
                 ForeignKeyMode.RELATIONS,
                 BooleanMode.NATIVE,
                 OutputMode.ALL,

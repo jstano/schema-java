@@ -130,7 +130,7 @@ public class GenSQL {
                 + " [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]"
                 + " [--pg-version=N]");
         System.out.println(
-            "   where <target-database> is one or more of: [H2,POSTGRES,SQL_SERVER] separated by"
+            "   where <target-database> is one or more of: [H2,POSTGRESQL,SQL_SERVER] separated by"
                 + " commas");
         System.out.println(
             "   and   <foreign-key-mode> is one of: none,relations,triggers (default is"
