@@ -10,22 +10,26 @@ import com.stano.schema.model.Schema;
 import com.stano.schema.parser.SchemaParser;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.URI;
 import java.net.URL;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("PostgreSQL UUID Version-Specific Generation")
 class PostgreSQLUUIDVersionTest {
 
+  private Schema schema;
+
+  @BeforeEach
+  void setUp() throws Exception {
+    URL schemaURL = getClass().getResource("/test-schema.xml");
+    assertNotNull(schemaURL, "test-schema.xml must be on the classpath");
+    schema = new SchemaParser().parseSchema(schemaURL);
+  }
+
   @Test
   @DisplayName("should generate generate_uuid() function for PG 17")
   void shouldGenerateGenerateUUIDFunctionForPG17() throws Exception {
-    URL schemaURL =
-        new URI(
-                "file:///Users/jstano/workspace/java-schema/schema-model/src/test/resources/schema-parser-test-schema.xml")
-            .toURL();
-    Schema schema = new SchemaParser().parseSchema(schemaURL);
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
@@ -54,11 +58,6 @@ class PostgreSQLUUIDVersionTest {
   @Test
   @DisplayName("should not generate generate_uuid() function for PG 18")
   void shouldNotGenerateGenerateUUIDFunctionForPG18() throws Exception {
-    URL schemaURL =
-        new URI(
-                "file:///Users/jstano/workspace/java-schema/schema-model/src/test/resources/schema-parser-test-schema.xml")
-            .toURL();
-    Schema schema = new SchemaParser().parseSchema(schemaURL);
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
@@ -149,11 +148,6 @@ class PostgreSQLUUIDVersionTest {
   @Test
   @DisplayName("default version (0) should use generate_uuid() as pre-18")
   void shouldDefaultToPrePG18Behavior() throws Exception {
-    URL schemaURL =
-        new URI(
-                "file:///Users/jstano/workspace/java-schema/schema-model/src/test/resources/schema-parser-test-schema.xml")
-            .toURL();
-    Schema schema = new SchemaParser().parseSchema(schemaURL);
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
