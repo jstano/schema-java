@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -113,7 +113,7 @@ class ColumnTest {
   @DisplayName(
       "Table integration: hasColumn is case-insensitive and getColumn caches names ignoring case")
   void testTableIntegrationHasColumn() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "users", null, LockEscalation.AUTO, false);
 
     table
@@ -135,7 +135,7 @@ class ColumnTest {
   @Test
   @DisplayName("Table integration: getIdentityColumn returns first SEQUENCE or LONGSEQUENCE")
   void testTableIntegrationGetIdentityColumn() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table t1 = new Table(schema, "public", "t1", null, LockEscalation.AUTO, false);
 
     t1.getColumns()
@@ -165,7 +165,7 @@ class ColumnTest {
   @Test
   @DisplayName("Table integration: getColumnsWithCheckConstraints collects columns per BooleanMode")
   void testTableIntegrationGetColumnsWithCheckConstraints() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
 
     Column c1 = new Column("flag", ColumnType.BOOLEAN, 0, false);

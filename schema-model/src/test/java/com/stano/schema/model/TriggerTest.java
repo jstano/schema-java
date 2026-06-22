@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -47,7 +47,7 @@ class TriggerTest {
   @Test
   @DisplayName("Table.getTriggers exposes a live mutable list (current contract)")
   void tableGetTriggersExposesLiveMutableList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
 
     assertEquals(table.getTriggers().size(), 0);

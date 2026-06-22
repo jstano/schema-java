@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,7 @@ class RelationTest {
       "Schema.buildReverseRelations should add inverse relation entries with"
           + " disableUsageChecking=false")
   void schemaBuildReverseRelationsShouldAddInverseRelationEntries() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table parent = new Table(schema, "public", "users", null, LockEscalation.AUTO, false);
     Table child = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
 
@@ -78,7 +78,7 @@ class RelationTest {
   @DisplayName(
       "Schema.validate should flag SETNULL when from-column is required and ignore otherwise")
   void schemaValidateShouldFlagSETNULL() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     Table parent = new Table(schema, "public", "parent", null, LockEscalation.AUTO, false);
     Table childRequired =

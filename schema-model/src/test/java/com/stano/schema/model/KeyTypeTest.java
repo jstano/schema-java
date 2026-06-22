@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.HashSet;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -51,7 +51,7 @@ class KeyTypeTest {
       "integration: Keys created with each KeyType reflect their type and Table.getPrimaryKey uses"
           + " PRIMARY")
   void testTablePrimaryKey() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "customer", null, LockEscalation.AUTO, false);
 
     table

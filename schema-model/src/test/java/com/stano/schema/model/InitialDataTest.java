@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +44,7 @@ class InitialDataTest {
   @Test
   @DisplayName("Table.getInitialData exposes a live mutable list (current contract)")
   void testTableInitialDataLiveList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
 
     assertTrue(table.getInitialData().isEmpty());

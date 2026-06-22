@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.HashSet;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -49,7 +49,7 @@ class LockEscalationTest {
   @Test
   @DisplayName("Table should store and return LockEscalation via getter")
   void testTableLockEscalation() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     Table tblDisable = new Table(schema, "public", "t1", null, LockEscalation.DISABLE, false);
     Table tblAuto = new Table(schema, "public", "t2", "exported", LockEscalation.AUTO, true);

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.List;
@@ -20,7 +21,7 @@ class SchemaTest {
   @Test
   @DisplayName("constructor sets URL and default modes; setters update modes")
   void constructorSetsURLAndDefaultModes() throws MalformedURLException {
-    URL url = new URL("https://example.com/schema.json");
+    URL url = URI.create("https://example.com/schema.json").toURL();
     Schema schema = new Schema(url);
 
     assertEquals(schema.getSchemaURL(), url);
@@ -39,7 +40,7 @@ class SchemaTest {
       "addTable populates tables and case-insensitive map; getTables unmodifiable; getTable throws"
           + " when missing")
   void addTablePopulatesTables() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table tUsers = new Table(schema, "public", "Users", null, LockEscalation.AUTO, false);
     Table tOrders = new Table(schema, "sales", "orders", null, LockEscalation.AUTO, false);
 
@@ -68,7 +69,7 @@ class SchemaTest {
       "addEnumType stores by name; getEnumType returns, getEnumTypes exposes values; throws when"
           + " missing")
   void addEnumTypeStoresByName() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     EnumType etColor = new EnumType("Color");
     etColor.addValue(new EnumValue("RED", "R"));
     EnumType etStatus = new EnumType("Status");
@@ -89,7 +90,7 @@ class SchemaTest {
   @Test
   @DisplayName("sortTablesByName orders tables lexicographically by getName()")
   void sortTablesByNameOrdersTablesLexicographically() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table t3 = new Table(schema, "public", "zeta", null, LockEscalation.AUTO, false);
     Table t1 = new Table(schema, "public", "alpha", null, LockEscalation.AUTO, false);
     Table t2 = new Table(schema, "public", "Beta", null, LockEscalation.AUTO, false);
@@ -111,7 +112,7 @@ class SchemaTest {
   @DisplayName(
       "getViews returns unmodifiable list and preserves distinct-name order for simple case")
   void getViewsReturnsUnmodifiableList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     schema.addView(new View("public", "A", "ga", null));
     schema.addView(new View("public", "a", "pg", DatabaseType.POSTGRESQL));
     schema.addView(new View("public", "B", "gb", null));
@@ -129,7 +130,7 @@ class SchemaTest {
   @Test
   @DisplayName("getViews prefers DB-specific over generic for same logical name")
   void getViewsPrefersDBSpecificOverGeneric() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     schema.addView(new View("public", "sales", "generic", null));
     schema.addView(new View("public", "sales", "pgsql", DatabaseType.POSTGRESQL));
     schema.addView(new View("public", "sales", "mssql", DatabaseType.SQL_SERVER));
@@ -148,7 +149,7 @@ class SchemaTest {
       "buildReverseRelations adds reverse on parent with disableUsageChecking=false (in"
           + " SchemaSpec)")
   void buildReverseRelationsAddsReverseOnParent() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table parent = new Table(schema, "public", "users", null, LockEscalation.AUTO, false);
     Table child = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
     parent.getColumns().add(new Column("id", ColumnType.SEQUENCE, 0, true));
@@ -173,7 +174,7 @@ class SchemaTest {
   @Test
   @DisplayName("validate flags SETNULL on required from-column (in SchemaSpec)")
   void validateFlagsSETNULLOnRequiredFromColumn() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table parent = new Table(schema, "public", "parent", null, LockEscalation.AUTO, false);
     Table childReq = new Table(schema, "public", "child_req", null, LockEscalation.AUTO, false);
     parent.getColumns().add(new Column("id", ColumnType.SEQUENCE, 0, true));

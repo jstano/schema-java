@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -49,7 +49,7 @@ class ViewTest {
   @Test
   @DisplayName("Schema.getViews should return DB-specific when present, otherwise generic")
   void schemaGetViewsShouldReturnDBSpecificWhenPresent() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     schema.addView(new View("public", "sales", "SELECT 1 -- generic", null));
     schema.addView(new View("public", "sales", "SELECT 1 -- pg", DatabaseType.POSTGRESQL));
@@ -80,7 +80,7 @@ class ViewTest {
   @DisplayName(
       "Schema.getViews should treat view names case-insensitively and preserve distinct order")
   void schemaGetViewsShouldTreatViewNamesCaseInsensitively() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     schema.addView(new View("public", "AView", "A generic", null));
     schema.addView(new View("public", "bview", "B generic", null));
@@ -103,7 +103,7 @@ class ViewTest {
   @Test
   @DisplayName("Schema.getViews should return an unmodifiable list")
   void schemaGetViewsShouldReturnUnmodifiableList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     schema.addView(new View("public", "only", "SELECT 1", null));
 
     assertThrows(

@@ -18,28 +18,28 @@ public class SchemaImporter {
               .hasArg()
               .required()
               .desc("database to connect to")
-              .build());
+              .get());
       options.addOption(
           Option.builder()
               .longOpt("username")
               .hasArg()
               .required()
               .desc("username to connect with")
-              .build());
+              .get());
       options.addOption(
           Option.builder()
               .longOpt("password")
               .hasArg()
               .required()
               .desc("password to connect with")
-              .build());
+              .get());
       options.addOption(
           Option.builder()
               .longOpt("file")
               .hasArg()
               .required()
               .desc("file to write schema to")
-              .build());
+              .get());
 
       var parser = new DefaultParser();
       var cmd = parser.parse(options, args);

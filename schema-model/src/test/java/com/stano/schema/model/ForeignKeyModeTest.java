@@ -3,7 +3,7 @@ package com.stano.schema.model;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.HashSet;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +48,7 @@ class ForeignKeyModeTest {
   @Test
   @DisplayName("Schema should store and return ForeignKeyMode via getter/setter")
   void testSchemaForeignKeyMode() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     schema.setForeignKeyMode(ForeignKeyMode.RELATIONS);
     assertEquals(ForeignKeyMode.RELATIONS, schema.getForeignKeyMode());

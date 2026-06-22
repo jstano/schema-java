@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -83,7 +83,7 @@ class KeyTest {
   @Test
   @DisplayName("Table integration: getPrimaryKey and getPrimaryKeyColumns work as expected")
   void tableIntegrationGetPrimaryKey() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "users", null, LockEscalation.AUTO, false);
 
     table

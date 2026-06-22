@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ class TableTest {
   @Test
   @DisplayName("constructor should store fields and toString returns the table name")
   void constructorShouldStoreFieldsAndToStringReturnsTheTableName() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     Table table = new Table(schema, "public", "users", "exported_at", LockEscalation.AUTO, true);
 
@@ -33,7 +33,7 @@ class TableTest {
   @Test
   @DisplayName("getColumn should populate lazy map and be case-insensitive; hasColumn mirrors that")
   void getColumnShouldPopulateLazyMapAndBeCaseInsensitive() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "accounts", null, LockEscalation.AUTO, false);
 
     table
@@ -54,7 +54,7 @@ class TableTest {
   @Test
   @DisplayName("getIdentityColumn returns first SEQUENCE or LONGSEQUENCE if present")
   void getIdentityColumnReturnsFirstSequenceOrLongsequenceIfPresent() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
 
     Table t1 = new Table(schema, "public", "t1", null, LockEscalation.AUTO, false);
     t1.getColumns()
@@ -83,7 +83,7 @@ class TableTest {
   @DisplayName("getPrimaryKey and getPrimaryKeyColumns return correct info or null when absent")
   void getPrimaryKeyAndGetPrimaryKeyColumnsReturnCorrectInfoOrNullWhenAbsent()
       throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
 
     table
@@ -110,7 +110,7 @@ class TableTest {
   @Test
   @DisplayName("hasOption uses identity semantics against the live options list")
   void hasOptionUsesIdentitySemantics() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "items", null, LockEscalation.AUTO, false);
 
     assertTrue(table.getOptions().isEmpty());
@@ -128,7 +128,7 @@ class TableTest {
           + " constraints")
   void hasColumnConstraintsAndGetColumnsWithCheckConstraintsDependOnBooleanMode()
       throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "orders", null, LockEscalation.AUTO, false);
 
     Column boolCol = new Column("flag", ColumnType.BOOLEAN, 0, false);
@@ -153,7 +153,7 @@ class TableTest {
       "getColumnRelation should return matching relation by from-column name case-insensitively or"
           + " null")
   void getColumnRelationShouldReturnMatchingRelation() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "child", null, LockEscalation.AUTO, false);
 
     table
@@ -176,7 +176,7 @@ class TableTest {
   @Test
   @DisplayName("getIndexes should expose a live mutable list and preserve insertion order")
   void getIndexesShouldExposeLiveMutableList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "idx_test", null, LockEscalation.AUTO, false);
 
     assertTrue(table.getIndexes().isEmpty());
@@ -198,7 +198,7 @@ class TableTest {
   @Test
   @DisplayName("getConstraints should expose a live mutable list that reflects changes")
   void getConstraintsShouldExposeLiveMutableList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "con_test", null, LockEscalation.AUTO, false);
 
     assertTrue(table.getConstraints().isEmpty());
@@ -224,7 +224,7 @@ class TableTest {
   @DisplayName(
       "getAggregations should expose a live list and store Aggregation instances correctly")
   void getAggregationsShouldExposeLiveList() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table table = new Table(schema, "public", "agg_test", null, LockEscalation.AUTO, false);
 
     var cols = List.of(new AggregationColumn(AggregationType.SUM, "amount", "total_amount"));
@@ -267,7 +267,7 @@ class TableTest {
       "hasColumnConstraints returns false when no columns require constraints (false path)")
   void hasColumnConstraintsReturnsFalseWhenNoColumnsRequireConstraints()
       throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     Table t1 = new Table(schema, "public", "no_checks_native", null, LockEscalation.AUTO, false);
     Table t2 = new Table(schema, "public", "no_checks_any", null, LockEscalation.AUTO, false);
 

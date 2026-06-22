@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +50,7 @@ class OtherSqlTest {
   @Test
   @DisplayName("Schema should collect OtherSql entries and expose an unmodifiable copy")
   void schemaShouldCollectOtherSqlEntries() throws MalformedURLException {
-    Schema schema = new Schema(new URL("https://example.com/schema.json"));
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
     OtherSql a = new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.TOP, "A;");
     OtherSql b = new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.BOTTOM, "B;");
 
