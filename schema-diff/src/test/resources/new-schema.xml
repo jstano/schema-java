@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema>
+  <table name="users">
+    <column name="id" type="int" required="true"/>
+    <column name="full_name" type="varchar" length="200" required="true"/>
+    <column name="email" type="varchar" length="255" required="true"/>
+    <key type="primary">
+      <column name="id"/>
+    </key>
+    <key type="unique">
+      <column name="email"/>
+    </key>
+  </table>
+  <table name="posts">
+    <column name="id" type="int" required="true"/>
+    <column name="user_id" type="int" required="true"/>
+    <column name="title" type="varchar" length="255" required="true"/>
+    <column name="content" type="text" required="false"/>
+    <column name="created_at" type="timestamp" required="false"/>
+    <key type="primary">
+      <column name="id"/>
+    </key>
+    <relation from-column="user_id" to-table="users" to-column="id" type="cascade"/>
+  </table>
+  <view name="user_posts">
+    <sql>SELECT u.id, u.full_name, p.title FROM users u JOIN posts p ON u.id = p.user_id</sql>
+  </view>
+</schema>

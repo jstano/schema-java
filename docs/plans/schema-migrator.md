@@ -2,7 +2,7 @@
 
 ## Context
 
-java-schema already generates DDL from a schema definition. This plan adds a state-based migration workflow: compare two schema XML files, produce an editable changeset XML, then generate dialect-specific ALTER/DROP/CREATE SQL from that changeset.
+schema-java already generates DDL from a schema definition. This plan adds a state-based migration workflow: compare two schema XML files, produce an editable changeset XML, then generate dialect-specific ALTER/DROP/CREATE SQL from that changeset.
 
 The key architectural principle: **schema comparison produces a migration model, not SQL**. SQL is generated from the reviewed migration model as a separate step. This separates ambiguous structural differences (rename vs drop+add) from developer intent, and keeps comparison, intent, and generation cleanly decoupled.
 
@@ -101,7 +101,7 @@ plugins { id("com.stano.java-library-convention") }
 configurePublishing(
   name = "schema-diff",
   description = "Computes structural differences between two Schema models and produces a ChangeSet.",
-  url = "https://github.com/jstano/java-schema"
+  url = "https://github.com/jstano/schema-java"
 )
 
 dependencies {
@@ -173,7 +173,7 @@ plugins { id("com.stano.java-library-convention") }
 configurePublishing(
   name = "schema-migration-generator",
   description = "Generates SQL migration scripts from a ChangeSet for multiple database dialects.",
-  url = "https://github.com/jstano/java-schema"
+  url = "https://github.com/jstano/schema-java"
 )
 
 dependencies {

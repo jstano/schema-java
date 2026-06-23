@@ -11,11 +11,13 @@ javaPlatform {
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
   api(project(":schema-diagram-generator"))
+  api(project(":schema-diff"))
   api(project(":schema-importer"))
   api(project(":schema-installer"))
   api(project(":schema-installer-flyway"))
   api(project(":schema-installer-liquibase"))
   api(project(":schema-migrations"))
+  api(project(":schema-migration-generator"))
   api(project(":schema-model"))
   api(project(":schema-parser"))
   api(project(":schema-sql-generator"))
