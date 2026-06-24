@@ -19,6 +19,7 @@ dependencies {
     api("net.logstash.logback:logstash-logback-encoder:9.0")
     api("org.apache.commons:commons-collections4:4.5.0")
     api("org.apache.commons:commons-lang3:3.20.0")
+    api("org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r")
     api("org.apache.commons:commons-text:1.15.0")
     api("org.apache.groovy:groovy-all:4.0.32")
     api("org.flywaydb:flyway-core:12.8.1")

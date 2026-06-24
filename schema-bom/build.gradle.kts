@@ -11,6 +11,7 @@ javaPlatform {
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
   api(project(":schema-diagram-generator"))
+  api(project(":schema-diff-git"))
   api(project(":schema-diff"))
   api(project(":schema-importer"))
   api(project(":schema-installer"))
