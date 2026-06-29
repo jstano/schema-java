@@ -19,6 +19,7 @@ dependencies {
   api(platform(project(":schema-platform-dependencies")))
   api(project(":schema-model"))
   implementation(project(":schema-diff"))
+  implementation(project(":schema-migration-generator"))
   implementation(project(":schema-parser"))
   implementation("commons-cli:commons-cli")
   implementation("org.eclipse.jgit:org.eclipse.jgit")

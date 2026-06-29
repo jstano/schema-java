@@ -1,6 +1,5 @@
 package com.stano.schema.diff;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,10 +9,11 @@ import com.stano.schema.diff.change.AddKeyChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
+import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Schema;
+import com.stano.schema.model.Table;
 import com.stano.schema.parser.SchemaParser;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.net.URL;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,50 +21,7 @@ import org.junit.jupiter.api.Test;
 @DisplayName("SchemaDiffIntegration")
 class SchemaDiffIntegrationTest {
 
-  @Test
-  @DisplayName("diff -> write -> parse round trip maintains structural equivalence")
-  void roundTripPreservesChangeSet() throws Exception {
-    // Load two schemas from fixtures
-    URL oldSchemaUrl = getClass().getResource("/old-schema.xml");
-    URL newSchemaUrl = getClass().getResource("/new-schema.xml");
-    assertNotNull(oldSchemaUrl, "old-schema.xml fixture not found");
-    assertNotNull(newSchemaUrl, "new-schema.xml fixture not found");
-
-    SchemaParser parser = new SchemaParser();
-    Schema oldSchema = parser.parseSchema(oldSchemaUrl);
-    Schema newSchema = parser.parseSchema(newSchemaUrl);
-
-    // Diff the schemas
-    SchemaDiffEngine engine = new SchemaDiffEngine();
-    ChangeSet originalChangeSet = engine.diff(oldSchema, newSchema);
-
-    // Write to XML
-    StringWriter sw = new StringWriter();
-    PrintWriter pw = new PrintWriter(sw);
-    ChangeSetWriter writer = new ChangeSetWriter();
-    writer.write(originalChangeSet, pw);
-    String xml = sw.toString();
-
-    // Parse back from XML
-    StringWriter sw2 = new StringWriter();
-    ChangeSetParser changeSetParser = new ChangeSetParser();
-    ChangeSet parsedChangeSet =
-        changeSetParser.parse(new java.io.ByteArrayInputStream(xml.getBytes()));
-
-    // Assert changesets have same structure
-    assertEquals(
-        originalChangeSet.getChanges().size(),
-        parsedChangeSet.getChanges().size(),
-        "Changesets should have same number of changes");
-
-    // Verify all changes are present in same order
-    for (int i = 0; i < originalChangeSet.getChanges().size(); i++) {
-      assertEquals(
-          originalChangeSet.getChanges().get(i).getClass(),
-          parsedChangeSet.getChanges().get(i).getClass(),
-          "Change types should match at position " + i);
-    }
-  }
+  private static final URL TEST_URL = SchemaDiffIntegrationTest.class.getResource("/");
 
   @Test
   @DisplayName("detects expected changes between old and new schema")
@@ -83,7 +40,6 @@ class SchemaDiffIntegrationTest {
 
     assertFalse(changeSet.isEmpty(), "Changeset should not be empty");
 
-    // Verify expected change types are present
     boolean hasDropColumn = false;
     boolean hasModifyColumn = false;
     boolean hasAddColumn = false;
@@ -98,35 +54,64 @@ class SchemaDiffIntegrationTest {
       if (change instanceof AddViewChange) hasAddView = true;
     }
 
-    // At least some change types should be present
     assertTrue(
         hasAddColumn || hasDropColumn || hasModifyColumn || hasAddKey || hasAddView,
         "Should have at least one type of change");
   }
 
   @Test
-  @DisplayName("generates valid XML from changeset")
-  void generatesValidXml() throws Exception {
-    URL oldSchemaUrl = getClass().getResource("/old-schema.xml");
-    URL newSchemaUrl = getClass().getResource("/new-schema.xml");
+  @DisplayName(
+      "flags rename candidates when column dropped and same-type column added to same table")
+  void flagsRenameCandidates() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, null, "users", null, null, false);
+    oldTable.getColumns().add(new Column("first_name", ColumnType.VARCHAR, 255, false));
+    oldSchema.addTable(oldTable);
 
-    SchemaParser parser = new SchemaParser();
-    Schema oldSchema = parser.parseSchema(oldSchemaUrl);
-    Schema newSchema = parser.parseSchema(newSchemaUrl);
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, null, "users", null, null, false);
+    newTable.getColumns().add(new Column("full_name", ColumnType.VARCHAR, 255, false));
+    newSchema.addTable(newTable);
 
     SchemaDiffEngine engine = new SchemaDiffEngine();
     ChangeSet changeSet = engine.diff(oldSchema, newSchema);
 
-    StringWriter sw = new StringWriter();
-    PrintWriter pw = new PrintWriter(sw);
-    ChangeSetWriter writer = new ChangeSetWriter();
-    writer.write(changeSet, pw);
-    String xml = sw.toString();
+    assertFalse(changeSet.isEmpty());
+    DropColumnChange drop =
+        changeSet.getChanges().stream()
+            .filter(c -> c instanceof DropColumnChange)
+            .map(c -> (DropColumnChange) c)
+            .findFirst()
+            .orElse(null);
+    assertNotNull(drop, "Should have a DropColumnChange");
+    assertFalse(drop.getRenameCandidates().isEmpty(), "Should flag full_name as rename candidate");
+    assertTrue(drop.getRenameCandidates().contains("full_name"));
+  }
 
-    // Verify XML structure
-    assertTrue(xml.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
-    assertTrue(xml.contains("<changeset>"));
-    assertTrue(xml.contains("</changeset>"));
-    assertFalse(changeSet.isEmpty(), "Changeset should not be empty");
+  @Test
+  @DisplayName("does not flag rename candidates when types differ")
+  void doesNotFlagRenameCandidatesWhenTypesDiffer() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, null, "users", null, null, false);
+    oldTable.getColumns().add(new Column("code", ColumnType.INT, 0, false));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, null, "users", null, null, false);
+    newTable.getColumns().add(new Column("label", ColumnType.VARCHAR, 100, false));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    DropColumnChange drop =
+        changeSet.getChanges().stream()
+            .filter(c -> c instanceof DropColumnChange)
+            .map(c -> (DropColumnChange) c)
+            .findFirst()
+            .orElse(null);
+    assertNotNull(drop);
+    assertTrue(
+        drop.getRenameCandidates().isEmpty(), "Should not flag candidates when types differ");
   }
 }

@@ -5,17 +5,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.change.AddConstraintChange;
+import com.stano.schema.diff.change.AddFunctionChange;
+import com.stano.schema.diff.change.AddProcedureChange;
 import com.stano.schema.diff.change.AddTableChange;
 import com.stano.schema.diff.change.DropConstraintChange;
+import com.stano.schema.diff.change.DropFunctionChange;
 import com.stano.schema.diff.change.DropKeyChange;
+import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Constraint;
+import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.Function;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyColumn;
 import com.stano.schema.model.KeyType;
+import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
@@ -350,6 +357,110 @@ class SchemaDiffEngineTest {
     assertTrue(relationDropIdx >= 0, "Should have relation drop");
     assertTrue(tableDropIdx >= 0, "Should have table1 drop");
     assertTrue(relationDropIdx < tableDropIdx, "Relations should be dropped before tables");
+  }
+
+  @Test
+  @DisplayName("detects added function")
+  void detectsAddedFunction() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addFunction(
+        new Function(null, "fn_greet", DatabaseType.POSTGRESQL, "CREATE FUNCTION fn_greet()"));
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertEquals(1, changeSet.getChanges().size());
+    assertTrue(changeSet.getChanges().get(0) instanceof AddFunctionChange);
+    assertEquals(
+        "fn_greet", ((AddFunctionChange) changeSet.getChanges().get(0)).getFunction().getName());
+  }
+
+  @Test
+  @DisplayName("detects dropped function")
+  void detectsDroppedFunction() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addFunction(
+        new Function(null, "fn_greet", DatabaseType.POSTGRESQL, "CREATE FUNCTION fn_greet()"));
+    Schema newSchema = new Schema(TEST_URL);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertEquals(1, changeSet.getChanges().size());
+    assertTrue(changeSet.getChanges().get(0) instanceof DropFunctionChange);
+    assertEquals(
+        "fn_greet", ((DropFunctionChange) changeSet.getChanges().get(0)).getFunctionName());
+  }
+
+  @Test
+  @DisplayName("detects modified function as drop then add")
+  void detectsModifiedFunction() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addFunction(
+        new Function(null, "fn_greet", DatabaseType.POSTGRESQL, "CREATE FUNCTION fn_greet() v1"));
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addFunction(
+        new Function(null, "fn_greet", DatabaseType.POSTGRESQL, "CREATE FUNCTION fn_greet() v2"));
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertEquals(2, changeSet.getChanges().size());
+    assertTrue(changeSet.getChanges().get(0) instanceof DropFunctionChange);
+    assertTrue(changeSet.getChanges().get(1) instanceof AddFunctionChange);
+  }
+
+  @Test
+  @DisplayName("detects added procedure")
+  void detectsAddedProcedure() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addProcedure(
+        new Procedure(null, "sp_audit", DatabaseType.POSTGRESQL, "CREATE PROCEDURE sp_audit()"));
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertEquals(1, changeSet.getChanges().size());
+    assertTrue(changeSet.getChanges().get(0) instanceof AddProcedureChange);
+    assertEquals(
+        "sp_audit", ((AddProcedureChange) changeSet.getChanges().get(0)).getProcedure().getName());
+  }
+
+  @Test
+  @DisplayName("detects dropped procedure")
+  void detectsDroppedProcedure() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addProcedure(
+        new Procedure(null, "sp_audit", DatabaseType.POSTGRESQL, "CREATE PROCEDURE sp_audit()"));
+    Schema newSchema = new Schema(TEST_URL);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertEquals(1, changeSet.getChanges().size());
+    assertTrue(changeSet.getChanges().get(0) instanceof DropProcedureChange);
+    assertEquals(
+        "sp_audit", ((DropProcedureChange) changeSet.getChanges().get(0)).getProcedureName());
+  }
+
+  @Test
+  @DisplayName("detects modified procedure as drop then add")
+  void detectsModifiedProcedure() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addProcedure(
+        new Procedure(null, "sp_audit", DatabaseType.POSTGRESQL, "CREATE PROCEDURE sp_audit() v1"));
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addProcedure(
+        new Procedure(null, "sp_audit", DatabaseType.POSTGRESQL, "CREATE PROCEDURE sp_audit() v2"));
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertEquals(2, changeSet.getChanges().size());
+    assertTrue(changeSet.getChanges().get(0) instanceof DropProcedureChange);
+    assertTrue(changeSet.getChanges().get(1) instanceof AddProcedureChange);
   }
 
   @Test

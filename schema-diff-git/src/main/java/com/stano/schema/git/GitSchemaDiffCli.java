@@ -1,8 +1,9 @@
 package com.stano.schema.git;
 
 import com.stano.schema.diff.ChangeSet;
-import com.stano.schema.diff.ChangeSetWriter;
 import com.stano.schema.diff.SchemaDiffEngine;
+import com.stano.schema.genmigration.GenMigration;
+import com.stano.schema.model.DatabaseType;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Path;
@@ -20,7 +21,14 @@ public class GitSchemaDiffCli {
                   .longOpt("output")
                   .hasArg()
                   .argName("file")
-                  .desc("write changeset XML to file (default: stdout)")
+                  .desc("write migration SQL to file (default: stdout)")
+                  .build())
+          .addOption(
+              Option.builder("d")
+                  .longOpt("database-type")
+                  .hasArg()
+                  .argName("type")
+                  .desc("database type: postgresql, h2, sql_server (default: postgresql)")
                   .build())
           .addOption(Option.builder("h").longOpt("help").desc("print this help").build());
 
@@ -40,15 +48,26 @@ public class GitSchemaDiffCli {
         System.exit(1);
       }
 
+      DatabaseType databaseType = DatabaseType.POSTGRESQL;
+      if (cmd.hasOption("d")) {
+        try {
+          databaseType = DatabaseType.valueOf(cmd.getOptionValue("d").toUpperCase());
+        } catch (IllegalArgumentException e) {
+          System.err.println("Error: unknown database type: " + cmd.getOptionValue("d"));
+          System.err.println("Valid types: postgresql, h2, sql_server");
+          System.exit(1);
+        }
+      }
+
       var schemaFile = Path.of(cmd.getArgs()[0]);
       var versions = new GitSchemaReader().readSchemas(schemaFile);
       var changeSet =
           new SchemaDiffEngine().diff(versions.getCommittedSchema(), versions.getCurrentSchema());
 
       if (cmd.hasOption("o")) {
-        writeToFile(changeSet, Path.of(cmd.getOptionValue("o")));
+        writeToFile(changeSet, databaseType, Path.of(cmd.getOptionValue("o")));
       } else {
-        writeToStdout(changeSet);
+        writeToStdout(changeSet, databaseType);
       }
     } catch (ParseException e) {
       System.err.println("Error: " + e.getMessage());
@@ -60,15 +79,16 @@ public class GitSchemaDiffCli {
     }
   }
 
-  private static void writeToStdout(ChangeSet changeSet) {
+  private static void writeToStdout(ChangeSet changeSet, DatabaseType databaseType) {
     try (var writer = new PrintWriter(System.out)) {
-      new ChangeSetWriter().write(changeSet, writer);
+      new GenMigration().generateMigrationSQL(databaseType, changeSet, writer);
     }
   }
 
-  private static void writeToFile(ChangeSet changeSet, Path outputPath) throws IOException {
+  private static void writeToFile(ChangeSet changeSet, DatabaseType databaseType, Path outputPath)
+      throws IOException {
     try (var writer = new PrintWriter(outputPath.toFile())) {
-      new ChangeSetWriter().write(changeSet, writer);
+      new GenMigration().generateMigrationSQL(databaseType, changeSet, writer);
     }
   }
 

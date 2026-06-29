@@ -10,6 +10,7 @@ javaPlatform {
 
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
+  api("com.stano:schema-xsd")
   api(project(":schema-diagram-generator"))
   api(project(":schema-diff-git"))
   api(project(":schema-diff"))

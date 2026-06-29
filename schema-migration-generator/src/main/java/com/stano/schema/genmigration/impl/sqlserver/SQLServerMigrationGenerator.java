@@ -2,13 +2,17 @@ package com.stano.schema.genmigration.impl.sqlserver;
 
 import com.stano.schema.diff.change.AddColumnChange;
 import com.stano.schema.diff.change.AddConstraintChange;
+import com.stano.schema.diff.change.AddFunctionChange;
 import com.stano.schema.diff.change.AddKeyChange;
+import com.stano.schema.diff.change.AddProcedureChange;
 import com.stano.schema.diff.change.AddRelationChange;
 import com.stano.schema.diff.change.AddTableChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
 import com.stano.schema.diff.change.DropConstraintChange;
+import com.stano.schema.diff.change.DropFunctionChange;
 import com.stano.schema.diff.change.DropKeyChange;
+import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
@@ -17,15 +21,20 @@ import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGenerator;
 import com.stano.schema.genmigration.impl.common.MigrationGeneratorOptions;
+import com.stano.schema.gensql.impl.common.ColumnTypeMapper;
+import com.stano.schema.gensql.impl.sqlserver.SQLServerColumnTypeMapper;
+import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
-import com.stano.schema.model.ColumnType;
+import com.stano.schema.model.DatabaseType;
 import java.io.PrintWriter;
 import java.util.Objects;
 
 public class SQLServerMigrationGenerator extends MigrationGenerator {
+  private final ColumnTypeMapper mapper;
 
   public SQLServerMigrationGenerator(MigrationGeneratorOptions options) {
     super(options);
+    this.mapper = new SQLServerColumnTypeMapper(BooleanMode.NATIVE, options.getSchema());
   }
 
   @Override
@@ -77,7 +86,7 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
         .append(" ADD ")
         .append(col.getName())
         .append(" ")
-        .append(toSqlType(col));
+        .append(mapper.toSqlType(col));
     if (col.getDefaultConstraint() != null) {
       sb.append(" DEFAULT ").append(col.getDefaultConstraint());
     }
@@ -92,7 +101,7 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
               + " ALTER COLUMN "
               + col.getName()
               + " "
-              + toSqlType(col)
+              + mapper.toSqlType(col)
               + " NOT NULL");
       w.print(options.getStatementSeparator());
       w.println();
@@ -118,7 +127,7 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
         .append(" ALTER COLUMN ")
         .append(newCol.getName())
         .append(" ")
-        .append(toSqlType(newCol));
+        .append(mapper.toSqlType(newCol));
     if (newCol.isRequired()) {
       sb.append(" NOT NULL");
     }
@@ -137,10 +146,7 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
                 + newCol.getName());
         w.print(options.getStatementSeparator());
         w.println();
-      }
-      // Dropping a named default constraint requires knowing the constraint name;
-      // emit a placeholder the developer must replace.
-      else {
+      } else {
         w.println(
             "-- TODO: DROP DEFAULT constraint on "
                 + change.getTableName()
@@ -282,6 +288,50 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   }
 
   @Override
+  protected void generateAddFunction(AddFunctionChange change) {
+    if (change.getFunction().getDatabaseType() != DatabaseType.SQL_SERVER) {
+      return;
+    }
+    PrintWriter w = options.getWriter();
+    w.println(change.getFunction().getSql());
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  @Override
+  protected void generateDropFunction(DropFunctionChange change) {
+    if (change.getDatabaseType() != DatabaseType.SQL_SERVER) {
+      return;
+    }
+    PrintWriter w = options.getWriter();
+    w.println("DROP FUNCTION IF EXISTS dbo." + change.getFunctionName());
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  @Override
+  protected void generateAddProcedure(AddProcedureChange change) {
+    if (change.getProcedure().getDatabaseType() != DatabaseType.SQL_SERVER) {
+      return;
+    }
+    PrintWriter w = options.getWriter();
+    w.println(change.getProcedure().getSql());
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  @Override
+  protected void generateDropProcedure(DropProcedureChange change) {
+    if (change.getDatabaseType() != DatabaseType.SQL_SERVER) {
+      return;
+    }
+    PrintWriter w = options.getWriter();
+    w.println("DROP PROCEDURE IF EXISTS dbo." + change.getProcedureName());
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  @Override
   protected void generateAddView(AddViewChange change) {
     PrintWriter w = options.getWriter();
     w.println("CREATE VIEW " + change.getView().getName() + " AS " + change.getView().getSql());
@@ -295,105 +345,5 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     w.println("DROP VIEW IF EXISTS " + change.getViewName());
     w.print(options.getStatementSeparator());
     w.println();
-  }
-
-  private String toSqlType(Column col) {
-    ColumnType type = col.getType();
-    StringBuilder sb = new StringBuilder();
-
-    switch (type) {
-      case VARCHAR:
-        sb.append("VARCHAR");
-        if (col.getLength() > 0) {
-          sb.append("(").append(col.getLength()).append(")");
-        }
-        break;
-      case CHAR:
-        sb.append("CHAR");
-        if (col.getLength() > 0) {
-          sb.append("(").append(col.getLength()).append(")");
-        }
-        break;
-      case DECIMAL:
-        sb.append("DECIMAL");
-        if (col.getLength() > 0) {
-          sb.append("(").append(col.getLength());
-          if (col.getScale() > 0) {
-            sb.append(",").append(col.getScale());
-          }
-          sb.append(")");
-        }
-        break;
-      case INT:
-        sb.append("INT");
-        break;
-      case LONG:
-        sb.append("BIGINT");
-        break;
-      case SHORT:
-        sb.append("SMALLINT");
-        break;
-      case BYTE:
-        sb.append("TINYINT");
-        break;
-      case FLOAT:
-        sb.append("REAL");
-        break;
-      case DOUBLE:
-        sb.append("FLOAT");
-        break;
-      case BOOLEAN:
-        sb.append("BIT");
-        break;
-      case DATE:
-        sb.append("DATE");
-        break;
-      case TIME:
-        sb.append("TIME");
-        break;
-      case TIMESTAMP:
-        sb.append("DATETIME");
-        break;
-      case TIMESTAMPTZ:
-        sb.append("DATETIMEOFFSET");
-        break;
-      case DATETIME:
-        sb.append("DATETIME");
-        break;
-      case BINARY:
-        sb.append("VARBINARY(max)");
-        break;
-      case TEXT:
-        sb.append("VARCHAR(max)");
-        break;
-      case CITEXT:
-        sb.append("VARCHAR(max)");
-        break;
-      case CSTEXT:
-        sb.append("VARCHAR(max)");
-        break;
-      case ENUM:
-        sb.append("VARCHAR(255)");
-        break;
-      case SEQUENCE:
-        sb.append("INT IDENTITY");
-        break;
-      case LONGSEQUENCE:
-        sb.append("BIGINT IDENTITY");
-        break;
-      case UUID:
-        sb.append("UNIQUEIDENTIFIER");
-        break;
-      case JSON:
-        sb.append("NVARCHAR(max)");
-        break;
-      case ARRAY:
-        sb.append("VARCHAR(max)");
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported column type for SQL Server migration: " + type);
-    }
-
-    return sb.toString();
   }
 }

@@ -10,6 +10,7 @@ javaPlatform {
 
 dependencies {
   constraints {
+    api("com.stano:schema-xsd:1.0.0-SNAPSHOT")
     api("ch.qos.logback:logback-classic:1.5.34")
     api("ch.qos.logback:logback-core:1.5.34")
     api("com.h2database:h2:2.1.214")

@@ -2,20 +2,26 @@ package com.stano.schema.diff;
 
 import com.stano.schema.diff.change.AddColumnChange;
 import com.stano.schema.diff.change.AddConstraintChange;
+import com.stano.schema.diff.change.AddFunctionChange;
 import com.stano.schema.diff.change.AddKeyChange;
+import com.stano.schema.diff.change.AddProcedureChange;
 import com.stano.schema.diff.change.AddRelationChange;
 import com.stano.schema.diff.change.AddTableChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
 import com.stano.schema.diff.change.DropConstraintChange;
+import com.stano.schema.diff.change.DropFunctionChange;
 import com.stano.schema.diff.change.DropKeyChange;
+import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.Constraint;
+import com.stano.schema.model.Function;
 import com.stano.schema.model.Key;
+import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
@@ -30,21 +36,27 @@ public class SchemaDiffEngine {
   public ChangeSet diff(Schema oldSchema, Schema newSchema) {
     ChangeSet changeSet = new ChangeSet();
 
-    // Drop phase: views → relations → keys → constraints → columns → tables
+    // Drop phase: views → functions → procedures → relations → keys → constraints → columns →
+    // tables
     dropViews(changeSet, oldSchema, newSchema);
+    dropFunctions(changeSet, oldSchema, newSchema);
+    dropProcedures(changeSet, oldSchema, newSchema);
     dropRelations(changeSet, oldSchema, newSchema);
     dropKeys(changeSet, oldSchema, newSchema);
     dropConstraints(changeSet, oldSchema, newSchema);
     dropColumns(changeSet, oldSchema, newSchema);
     dropTables(changeSet, oldSchema, newSchema);
 
-    // Add phase: tables → columns → modify columns → keys → constraints → relations → views
+    // Add phase: tables → columns → modify → keys → constraints → relations → functions →
+    // procedures → views
     addTables(changeSet, oldSchema, newSchema);
     addColumns(changeSet, oldSchema, newSchema);
     modifyColumns(changeSet, oldSchema, newSchema);
     addKeys(changeSet, oldSchema, newSchema);
     addConstraints(changeSet, oldSchema, newSchema);
     addRelations(changeSet, oldSchema, newSchema);
+    addFunctions(changeSet, oldSchema, newSchema);
+    addProcedures(changeSet, oldSchema, newSchema);
     addViews(changeSet, oldSchema, newSchema);
 
     return changeSet;
@@ -111,9 +123,18 @@ public class SchemaDiffEngine {
         continue;
       }
       Map<String, Column> newColumnsByName = indexColumnsByName(newTable);
+      Map<String, Column> oldColumnsByName = indexColumnsByName(oldTable);
       for (Column oldColumn : oldTable.getColumns()) {
         if (!newColumnsByName.containsKey(oldColumn.getName())) {
-          changeSet.addChange(new DropColumnChange(oldTable.getName(), oldColumn.getName()));
+          List<String> candidates = new ArrayList<>();
+          for (Column newColumn : newTable.getColumns()) {
+            if (!oldColumnsByName.containsKey(newColumn.getName())
+                && newColumn.getType() == oldColumn.getType()) {
+              candidates.add(newColumn.getName());
+            }
+          }
+          changeSet.addChange(
+              new DropColumnChange(oldTable.getName(), oldColumn.getName(), candidates));
         }
       }
     }
@@ -234,6 +255,50 @@ public class SchemaDiffEngine {
     }
   }
 
+  private void dropFunctions(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Function> newByKey = indexFunctionsByKey(newSchema);
+    for (Function old : oldSchema.getFunctions()) {
+      Function nw = newByKey.get(functionKey(old));
+      if (nw == null || !java.util.Objects.equals(old.getSql(), nw.getSql())) {
+        changeSet.addChange(new DropFunctionChange(old.getName(), old.getDatabaseType()));
+      }
+    }
+  }
+
+  private void addFunctions(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Function> oldByKey = indexFunctionsByKey(oldSchema);
+    for (Function nw : newSchema.getFunctions()) {
+      Function old = oldByKey.get(functionKey(nw));
+      if (old == null) {
+        changeSet.addChange(new AddFunctionChange(nw));
+      } else if (!java.util.Objects.equals(old.getSql(), nw.getSql())) {
+        changeSet.addChange(new AddFunctionChange(nw));
+      }
+    }
+  }
+
+  private void dropProcedures(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Procedure> newByKey = indexProceduresByKey(newSchema);
+    for (Procedure old : oldSchema.getProcedures()) {
+      Procedure nw = newByKey.get(procedureKey(old));
+      if (nw == null || !java.util.Objects.equals(old.getSql(), nw.getSql())) {
+        changeSet.addChange(new DropProcedureChange(old.getName(), old.getDatabaseType()));
+      }
+    }
+  }
+
+  private void addProcedures(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Procedure> oldByKey = indexProceduresByKey(oldSchema);
+    for (Procedure nw : newSchema.getProcedures()) {
+      Procedure old = oldByKey.get(procedureKey(nw));
+      if (old == null) {
+        changeSet.addChange(new AddProcedureChange(nw));
+      } else if (!java.util.Objects.equals(old.getSql(), nw.getSql())) {
+        changeSet.addChange(new AddProcedureChange(nw));
+      }
+    }
+  }
+
   private Map<String, Table> indexTablesByName(Schema schema) {
     Map<String, Table> map = new HashMap<>();
     for (Table table : schema.getTables()) {
@@ -304,5 +369,29 @@ public class SchemaDiffEngine {
         && col1.getScale() == col2.getScale()
         && col1.isRequired() == col2.isRequired()
         && java.util.Objects.equals(col1.getDefaultConstraint(), col2.getDefaultConstraint());
+  }
+
+  private Map<String, Function> indexFunctionsByKey(Schema schema) {
+    Map<String, Function> map = new HashMap<>();
+    for (Function f : schema.getFunctions()) {
+      map.put(functionKey(f), f);
+    }
+    return map;
+  }
+
+  private Map<String, Procedure> indexProceduresByKey(Schema schema) {
+    Map<String, Procedure> map = new HashMap<>();
+    for (Procedure p : schema.getProcedures()) {
+      map.put(procedureKey(p), p);
+    }
+    return map;
+  }
+
+  private String functionKey(Function f) {
+    return f.getName() + ":" + f.getDatabaseType();
+  }
+
+  private String procedureKey(Procedure p) {
+    return p.getName() + ":" + p.getDatabaseType();
   }
 }
