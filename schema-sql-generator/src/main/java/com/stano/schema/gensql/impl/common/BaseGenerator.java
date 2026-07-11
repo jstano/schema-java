@@ -40,4 +40,17 @@ public class BaseGenerator {
 
     return view.getSchemaName() + "." + view.getName();
   }
+
+  protected String buildKeyName(String prefix, String tableName, String suffix) {
+    String candidate = prefix + tableName + suffix;
+
+    if (candidate.length() <= maxKeyNameLength) {
+      return candidate;
+    }
+
+    int available = maxKeyNameLength - (prefix.length() + suffix.length());
+    int truncateTo = Math.max(0, Math.min(available, tableName.length()));
+
+    return prefix + tableName.substring(0, truncateTo) + suffix;
+  }
 }

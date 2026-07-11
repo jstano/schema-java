@@ -138,19 +138,18 @@ public class PostgreSQLGenerator extends SQLGenerator {
 
   private void createExtensions() {
 
-    sqlWriter.println("do $createextensions$");
+    sqlWriter.println("do $$");
     sqlWriter.println("begin");
     sqlWriter.println("   if (select usesuper from pg_user where usename = CURRENT_USER) then");
-    sqlWriter.println("      create extension if not exists \"uuid-ossp\";");
     sqlWriter.println("      create extension if not exists \"citext\";");
     sqlWriter.println("      create extension if not exists \"btree_gist\";");
     sqlWriter.println("   else");
     sqlWriter.println(
-        "      raise notice 'User % is not a superuser, could not create uuid-ossp or citext"
-            + " extensions.', current_user;");
+        "      raise notice 'Could not create extensions, user % does not have permission.',"
+            + " current_user;");
     sqlWriter.println("   end if;");
     sqlWriter.println("end;");
-    sqlWriter.println("$createextensions$" + statementSeparator);
+    sqlWriter.println("$$" + statementSeparator);
     sqlWriter.println();
   }
 

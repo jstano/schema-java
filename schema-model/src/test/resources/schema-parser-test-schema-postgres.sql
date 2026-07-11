@@ -19,11 +19,10 @@ $$;
 do $createextensions$
 begin
    if (select usesuper from pg_user where usename = CURRENT_USER) then
-      create extension if not exists "uuid-ossp";
       create extension if not exists "citext";
       create extension if not exists "btree_gist";
    else
-      raise notice 'User % is not a superuser, could not create uuid-ossp or citext extensions.', current_user;
+      raise notice 'User % is not a superuser, could not create citext or btree_gist extensions.', current_user;
    end if;
 end;
 $createextensions$;

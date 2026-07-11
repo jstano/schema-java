@@ -25,11 +25,7 @@ public class IndexGenerator extends BaseGenerator {
           continue;
         }
 
-        String keyName = IX_PREFIX + table.getName() + (keyIndex + 1);
-
-        if (keyName.length() > maxKeyNameLength) {
-          keyName = IX_PREFIX + table.getName().substring(0, maxKeyNameLength - 4) + (keyIndex + 1);
-        }
+        String keyName = buildKeyName(IX_PREFIX, table.getName(), String.valueOf(keyIndex + 1));
 
         outputIndex(table, keyName.toLowerCase(), key);
       }

@@ -128,7 +128,7 @@ public class GenSQL {
         System.out.println(
             "USAGE: GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]"
                 + " [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]"
-                + " [--pg-version=N]");
+                + " [--postgresql-version=N]");
         System.out.println(
             "   where <target-database> is one or more of: [H2,POSTGRESQL,SQL_SERVER] separated by"
                 + " commas");
@@ -140,7 +140,8 @@ public class GenSQL {
         System.out.println("   and   <output-indexes-only> causes only indexes to be output");
         System.out.println("   and   <output-triggers-only> causes only triggers to be output");
         System.out.println(
-            "   and   <pg-version> is the target PostgreSQL major version (e.g., 17, 18)");
+            "   and   <postgresql-version> is the target PostgreSQL major version (e.g., 17,"
+                + " 18)");
         System.exit(1);
       }
 
@@ -164,8 +165,8 @@ public class GenSQL {
           outputMode = OutputMode.INDEXES_ONLY;
         } else if (arg.equals("--output-triggers-only")) {
           outputMode = OutputMode.TRIGGERS_ONLY;
-        } else if (arg.startsWith("--pg-version=")) {
-          targetPostgresVersion = Integer.parseInt(arg.substring("--pg-version=".length()));
+        } else if (arg.startsWith("--postgresql-version=")) {
+          targetPostgresVersion = Integer.parseInt(arg.substring("--postgresql-version=".length()));
         }
       }
 

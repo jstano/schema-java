@@ -35,19 +35,9 @@ public class KeyGenerator extends BaseGenerator {
       String keyName = null;
 
       if (key.getType() == KeyType.PRIMARY) {
-        keyName = PK_PREFIX + table.getName();
-
-        if (keyName.length() > maxKeyNameLength) {
-          keyName = keyName.substring(0, maxKeyNameLength);
-        }
+        keyName = buildKeyName(PK_PREFIX, table.getName(), "");
       } else if (key.getType() == KeyType.UNIQUE) {
-        keyName = AK_PREFIX + table.getName() + nextUniqueKeyNo;
-
-        if (keyName.length() > maxKeyNameLength) {
-          keyName =
-              AK_PREFIX + table.getName().substring(0, maxKeyNameLength - 4) + nextUniqueKeyNo;
-        }
-
+        keyName = buildKeyName(AK_PREFIX, table.getName(), String.valueOf(nextUniqueKeyNo));
         nextUniqueKeyNo++;
       }
 

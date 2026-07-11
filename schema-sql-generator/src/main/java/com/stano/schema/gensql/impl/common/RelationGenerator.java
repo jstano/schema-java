@@ -31,12 +31,8 @@ public class RelationGenerator extends BaseGenerator {
     for (int relationIndex = 0; relationIndex < table.getRelations().size(); relationIndex++) {
       Relation relation = table.getRelations().get(relationIndex);
 
-      String relationName = FK_PREFIX + table.getName() + (relationIndex + 1);
-
-      if (relationName.length() > maxKeyNameLength) {
-        relationName =
-            FK_PREFIX + table.getName().substring(0, maxKeyNameLength - 4) + (relationIndex + 1);
-      }
+      String relationName =
+          buildKeyName(FK_PREFIX, table.getName(), String.valueOf(relationIndex + 1));
 
       outputRelation(table, relationName.toLowerCase(), relation);
     }

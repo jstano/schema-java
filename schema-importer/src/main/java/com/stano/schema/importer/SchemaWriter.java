@@ -25,7 +25,7 @@ public class SchemaWriter {
 """
 <database xmlns="http://stano.com/database"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://stano.com/database https://raw.githubusercontent.com/jstano/schema-xsd/refs/heads/main/schema.xsd"
+          xsi:schemaLocation="http://stano.com/database http://schema.stano.com/schema.xsd"
           version="1.0">\
 """);
 
