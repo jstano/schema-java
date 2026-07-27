@@ -1,19 +1,10 @@
-import com.stano.buildlogic.configurePublishing
-
 plugins {
-  id("com.stano.java-library-convention")
   application
 }
 
 application {
   mainClass.set("com.stano.schema.git.GitSchemaDiffCli")
 }
-
-configurePublishing(
-  name = "schema-diff-git",
-  description = "Reads schema XML files from git HEAD and the working tree.",
-  url = "https://github.com/jstano/schema-java"
-)
 
 dependencies {
   api(platform(project(":schema-platform-dependencies")))

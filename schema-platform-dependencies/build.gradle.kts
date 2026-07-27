@@ -1,7 +1,9 @@
+import com.stano.gradle.mavencentralpublish.MavenCentralPublishExtension
+
 plugins {
-  `java-platform`
-  `maven-publish`
-  `signing`
+  id("java-platform")
+  id("maven-publish")
+  id("com.stano.maven-central-publish")
 }
 
 javaPlatform {
@@ -10,7 +12,7 @@ javaPlatform {
 
 dependencies {
   constraints {
-    api("com.stano:schema-xsd:1.0.0-SNAPSHOT")
+    api("com.stano:schema-xsd:1.0.0")
     api("ch.qos.logback:logback-classic:1.5.34")
     api("ch.qos.logback:logback-core:1.5.34")
     api("com.h2database:h2:2.1.214")
@@ -40,54 +42,17 @@ dependencies {
   }
 }
 
-publishing {
-  publications {
-    create<MavenPublication>("mavenJava") {
-      from(components["javaPlatform"])
-      pom {
-        name.set("Schema Platform Dependencies")
-        description.set("Platform BOM for third-party dependency versions used by java-schema.")
-        url.set("https://github.com/jstano/java-schema")
-
-        licenses {
-          license {
-            name.set("MIT License")
-            url.set("https://opensource.org/license/mit")
-          }
-        }
-
-        developers {
-          developer {
-            id.set("jstano")
-            name.set("Jeff Stano")
-            email.set("jeff@stano.com")
-          }
-        }
-
-        scm {
-          connection.set("scm:git:https://github.com/jstano/java-schema.git")
-          developerConnection.set("scm:git:ssh://git@github.com:jstano/java-schema.git")
-          url.set("https://github.com/jstano/java-schema")
-        }
-      }
-    }
-  }
-  repositories {
-    maven {
-      url = uri(layout.buildDirectory.dir("staging-deploy").get().toString())
-    }
-  }
-}
-
-signing {
-  isRequired = gradle.taskGraph.hasTask("publish")
-  sign(publishing.publications["mavenJava"])
-}
-
-tasks.register<Zip>("zipStagingDeploy") {
-  archiveFileName.set("staging-deploy.zip")
-  destinationDirectory.set(layout.buildDirectory.dir("tmp"))
-  from("build/staging-deploy") {
-    include("**/*")
-  }
+extensions.configure<MavenCentralPublishExtension> {
+  componentName = "javaPlatform"
+  pomName = "Schema Platform Dependencies"
+  pomDescription = "Platform BOM for third-party dependency versions used by java-schema."
+  pomUrl = "https://github.com/jstano/schema-java"
+  licenseName = "MIT License"
+  licenseUrl = "https://opensource.org/license/mit"
+  developerId = "jstano"
+  developerName = "Jeff Stano"
+  developerEmail = "jeff@stano.com"
+  scmConnection = "scm:git:https://github.com/jstano/schema-java.git"
+  scmDeveloperConnection = "scm:git:ssh://git@github.com:jstano/schema-java.git"
+  scmUrl = "https://github.com/jstano/schema-java"
 }

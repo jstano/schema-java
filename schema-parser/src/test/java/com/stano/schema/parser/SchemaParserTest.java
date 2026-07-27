@@ -1,6 +1,9 @@
 package com.stano.schema.parser;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.model.AggregationFrequency;
 import com.stano.schema.model.AggregationType;
@@ -13,6 +16,7 @@ import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Table;
 import com.stano.schema.model.TableOption;
 import com.stano.schema.model.TriggerType;
+import java.net.URI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -152,7 +156,7 @@ class SchemaParserTest {
 
     assertThrows(
         SchemaParserException.class,
-        () -> schemaParser.parseSchema(new java.net.URI("file:bad-url").toURL()));
+        () -> schemaParser.parseSchema(new URI("file:bad-url").toURL()));
   }
 
   private void verifyParentTable(Table parentTable) {

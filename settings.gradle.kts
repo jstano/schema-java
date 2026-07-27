@@ -1,11 +1,15 @@
-rootProject.name = "schema"
-
-dependencyResolutionManagement {
+pluginManagement {
   repositories {
     mavenLocal()
-    mavenCentral()
+    gradlePluginPortal()
   }
 }
+
+plugins {
+  id("com.stano.settings") version "0.1.8"
+}
+
+rootProject.name = "schema"
 
 include("schema-bom")
 include("schema-diagram-generator")

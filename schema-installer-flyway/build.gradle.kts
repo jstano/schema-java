@@ -1,15 +1,3 @@
-import com.stano.buildlogic.configurePublishing
-
-plugins {
-  id("com.stano.java-library-convention")
-}
-
-configurePublishing(
-  name = "schema-installer-flyway",
-  description = "Flyway schema installer",
-  url = "https://github.com/jstano/java-schema"
-)
-
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
   api(project(":schema-installer"))

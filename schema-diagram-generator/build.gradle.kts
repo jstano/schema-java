@@ -1,15 +1,3 @@
-import com.stano.buildlogic.configurePublishing
-
-plugins {
-  id("com.stano.java-library-convention")
-}
-
-configurePublishing(
-  name = "schema-diagram-generator",
-  description = "Generates ER diagrams (Mermaid, PlantUML) from the schema model.",
-  url = "https://github.com/jstano/java-schema"
-)
-
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
 

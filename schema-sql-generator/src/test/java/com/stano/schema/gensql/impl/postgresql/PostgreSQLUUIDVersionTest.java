@@ -1,8 +1,13 @@
 package com.stano.schema.gensql.impl.postgresql;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.gensql.impl.common.OutputMode;
+import com.stano.schema.gensql.impl.common.SQLGenerator;
+import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
@@ -36,7 +41,7 @@ class PostgreSQLUUIDVersionTest {
 
     PostgreSQLGenerator generator =
         new PostgreSQLGenerator(
-            new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
+            new SQLGeneratorOptions(
                 schema,
                 pw,
                 DatabaseType.POSTGRESQL,
@@ -64,7 +69,7 @@ class PostgreSQLUUIDVersionTest {
 
     PostgreSQLGenerator generator =
         new PostgreSQLGenerator(
-            new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
+            new SQLGeneratorOptions(
                 schema,
                 pw,
                 DatabaseType.POSTGRESQL,
@@ -85,17 +90,15 @@ class PostgreSQLUUIDVersionTest {
   @Test
   @DisplayName("should use uuidv7() for PG 18 UUID defaults")
   void shouldUseUuidv7ForPG18UUIDDefaults() throws Exception {
-    com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeGenerator gen =
-        new com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeGenerator(
-            createMockGenerator(18));
+    PostgreSQLColumnTypeGenerator gen = new PostgreSQLColumnTypeGenerator(createMockGenerator(18));
 
     String defaultValue = gen.getUUIDDefaultValueSql(null);
     assertEquals("uuidv7()", defaultValue, "PG 18 should use uuidv7() for UUID defaults");
   }
 
-  private com.stano.schema.gensql.impl.common.SQLGenerator createMockGenerator(int pgVersion) {
-    return new com.stano.schema.gensql.impl.common.SQLGenerator(
-        new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
+  private SQLGenerator createMockGenerator(int pgVersion) {
+    return new SQLGenerator(
+        new SQLGeneratorOptions(
             null,
             null,
             DatabaseType.POSTGRESQL,
@@ -136,9 +139,7 @@ class PostgreSQLUUIDVersionTest {
   @Test
   @DisplayName("should use generate_uuid() for PG 17 UUID defaults")
   void shouldUseGenerateUUIDForPG17UUIDDefaults() throws Exception {
-    com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeGenerator gen =
-        new com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeGenerator(
-            createMockGenerator(17));
+    PostgreSQLColumnTypeGenerator gen = new PostgreSQLColumnTypeGenerator(createMockGenerator(17));
 
     String defaultValue = gen.getUUIDDefaultValueSql(null);
     assertEquals(
@@ -154,7 +155,7 @@ class PostgreSQLUUIDVersionTest {
 
     PostgreSQLGenerator generator =
         new PostgreSQLGenerator(
-            new com.stano.schema.gensql.impl.common.SQLGeneratorOptions(
+            new SQLGeneratorOptions(
                 schema,
                 pw,
                 DatabaseType.POSTGRESQL,
@@ -178,9 +179,7 @@ class PostgreSQLUUIDVersionTest {
   @Test
   @DisplayName("default version (0) generates generate_uuid() in column defaults")
   void shouldUseGenerateUUIDForDefaultVersion() throws Exception {
-    com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeGenerator gen =
-        new com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeGenerator(
-            createMockGenerator(0));
+    PostgreSQLColumnTypeGenerator gen = new PostgreSQLColumnTypeGenerator(createMockGenerator(0));
 
     String defaultValue = gen.getUUIDDefaultValueSql(null);
     assertEquals(

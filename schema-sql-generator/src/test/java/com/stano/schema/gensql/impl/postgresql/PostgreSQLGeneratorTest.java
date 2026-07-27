@@ -1,6 +1,8 @@
 package com.stano.schema.gensql.impl.postgresql;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.gensql.impl.common.OutputMode;
 import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;

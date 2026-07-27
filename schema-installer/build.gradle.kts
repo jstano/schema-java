@@ -1,15 +1,3 @@
-import com.stano.buildlogic.configurePublishing
-
-plugins {
-  id("com.stano.java-library-convention")
-}
-
-configurePublishing(
-  name = "schema-installer",
-  description = "Installs a schema into a database",
-  url = "https://github.com/jstano/java-schema"
-)
-
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
 

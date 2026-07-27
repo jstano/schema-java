@@ -1,12 +1,34 @@
+import com.stano.gradle.mavencentralpublish.MavenCentralPublishExtension
+
 plugins {
+  id("com.stano.base")
+  id("com.stano.sonar")
+  id("com.stano.maven-central-publish") apply false
+  id("com.stano.java-library") apply false
   id("java-library")
-  id("org.sonarqube") version "7.3.0.8198"
+  id("maven-publish")
+  id("jacoco")
 }
 
+val moduleDescriptions = mapOf(
+  "schema-model" to "A virtual model for relational database schemas.",
+  "schema-parser" to "A parser that can read schema xml files and generate a virtual model for relational database schemas.",
+  "schema-sql-generator" to "Generates SQL scripts for relational database schemas from the schema model.",
+  "schema-installer" to "Installs a schema into a database",
+  "schema-installer-flyway" to "Flyway schema installer",
+  "schema-installer-liquibase" to "Liquibase schema installer",
+  "schema-migrations" to "Migration helper classes",
+  "schema-importer" to "Creates schema xml files from relational database schemas.",
+  "schema-diagram-generator" to "Generates ER diagrams (Mermaid, PlantUML) from the schema model.",
+  "schema-diff" to "Computes structural differences between two Schema models and produces a ChangeSet.",
+  "schema-migration-generator" to "Generates SQL migration scripts from a ChangeSet for multiple database dialects.",
+  "schema-diff-git" to "Reads schema XML files from git HEAD and the working tree."
+)
+
 configure(javaProjects()) {
-  apply(plugin = "java-library")
+  apply(plugin = "com.stano.java-library")
+  apply(plugin = "com.stano.maven-central-publish")
   apply(plugin = "groovy")
-  apply(plugin = "jacoco")
 
   configurations {
     all {
@@ -14,55 +36,23 @@ configure(javaProjects()) {
     }
   }
 
-  tasks.withType<JavaCompile>().configureEach {
-    options.compilerArgs = compilerOptions()
-    sourceCompatibility = "21"
-    targetCompatibility = "21"
-  }
-  tasks.withType<GroovyCompile>().configureEach {
-    options.compilerArgs = compilerOptions()
-    sourceCompatibility = "21"
-    targetCompatibility = "21"
-    groovyOptions.setParameters(true)
-  }
-
-  java {
-    withJavadocJar()
-    withSourcesJar()
-  }
-
-  tasks.withType<Jar> {
-    exclude("**/.gitkeep")
-  }
-  tasks.withType<Javadoc>().configureEach {
-    (options as CoreJavadocOptions).addStringOption("Xdoclint:none", "-quiet")
-  }
-  tasks.withType<Test>().configureEach {
-    useJUnitPlatform()
-    jvmArgs("--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED", "--add-opens", "java.base/java.lang=ALL-UNNAMED")
-    finalizedBy("jacocoTestReport")
-  }
-  tasks.withType<JacocoReport>().configureEach {
-    reports {
-      html.required.set(true)
-      xml.required.set(true)
-    }
+  extensions.configure<MavenCentralPublishExtension> {
+    componentName = "java"
+    pomName = name
+    pomDescription = moduleDescriptions[name] ?: name
+    pomUrl = "https://github.com/jstano/schema-java"
+    licenseName = "MIT License"
+    licenseUrl = "https://opensource.org/license/mit"
+    developerId = "jstano"
+    developerName = "Jeff Stano"
+    developerEmail = "jeff@stano.com"
+    scmConnection = "scm:git:https://github.com/jstano/schema-java.git"
+    scmDeveloperConnection = "scm:git:ssh://git@github.com:jstano/schema-java.git"
+    scmUrl = "https://github.com/jstano/schema-java"
   }
 }
 
-sonar {
-  val sonarHost = "http://localhost:9000"
-  val sonarToken = "sqa_010b94573806de8eaf377006538b63f2b1ebba40"
-
-  properties {
-    property("sonar.host.url", sonarHost)
-    property("sonar.token", sonarToken)
-    property("sonar.projectName", "schema-java")
-    property("sonar.projectKey", "${project.group}:java-utils")
-    property("sonar.projectVersion", project.version)
-  }
-}
-
-fun javaProjects(): Set<Project> = subprojects - projectsToSkip()
-fun projectsToSkip(): Set<Project> = subprojects.filter { project -> project.name == "schema-bom" || project.name == "schema-platform-dependencies" }.toSet()
-fun compilerOptions(): List<String> = listOf("-Xlint:none", "-Xdoclint:none", "-nowarn", "-parameters")
+fun javaProjects(): Set<Project> = subprojects - nonJavaProjects()
+fun nonJavaProjects(): Set<Project> = subprojects.filter { project ->
+  project.name == "schema-bom" || project.name == "schema-platform-dependencies" || project.name == "test-platform-dependencies"
+}.toSet()

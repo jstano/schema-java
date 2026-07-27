@@ -1,15 +1,3 @@
-import com.stano.buildlogic.configurePublishing
-
-plugins {
-  id("com.stano.java-library-convention")
-}
-
-configurePublishing(
-  name = "schema-importer",
-  description = "Creates schema xml files from relational database schemas.",
-  url = "https://github.com/jstano/java-schema"
-)
-
 dependencies {
   api(platform(project(":schema-platform-dependencies")))
   api(project(":schema-model"))
