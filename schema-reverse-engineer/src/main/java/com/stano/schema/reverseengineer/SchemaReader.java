@@ -235,7 +235,7 @@ public class SchemaReader {
     return true;
   }
 
-  private void populateImportedKeys(Schema schema, DatabaseMetaData metaData) throws SQLException {
+  void populateImportedKeys(Schema schema, DatabaseMetaData metaData) throws SQLException {
     for (Table table : schema.getTables()) {
       var foreignKeys = new ArrayList<ForeignKeyData>();
 
@@ -266,9 +266,9 @@ public class SchemaReader {
       }
 
       for (var foreignKey : foreignKeys) {
-        var updateRule = foreignKey.updateRule();
+        var deleteRule = foreignKey.deleteRule();
         var relationType =
-            switch (updateRule) {
+            switch (deleteRule) {
               case "importedNoAction" -> RelationType.DONOTHING;
               case "importedKeyCascade" -> RelationType.CASCADE;
               case "importedKeyRestrict" -> RelationType.ENFORCE;
@@ -291,8 +291,7 @@ public class SchemaReader {
     }
   }
 
-  private ColumnType getColumnType(
-      int dataType, String typeName, boolean autoIncrement, int columnSize) {
+  ColumnType getColumnType(int dataType, String typeName, boolean autoIncrement, int columnSize) {
     if (dataType == Types.INTEGER) {
       if (autoIncrement) {
         return ColumnType.SEQUENCE;
@@ -362,6 +361,15 @@ public class SchemaReader {
     }
     if (typeName.equals("numeric")) {
       return ColumnType.DECIMAL;
+    }
+    if (dataType == Types.OTHER) {
+      if (typeName.equalsIgnoreCase("uuid")) {
+        return ColumnType.UUID;
+      }
+      if (typeName.equalsIgnoreCase("jsonb")) {
+        return ColumnType.JSON;
+      }
+      return ColumnType.VARCHAR;
     }
 
     throw new IllegalArgumentException("Unknown data type: " + dataType);
