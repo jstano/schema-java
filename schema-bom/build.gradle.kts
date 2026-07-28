@@ -16,7 +16,7 @@ dependencies {
   api(project(":schema-diagram-generator"))
   api(project(":schema-diff-git"))
   api(project(":schema-diff"))
-  api(project(":schema-importer"))
+  api(project(":schema-reverse-engineer"))
   api(project(":schema-installer"))
   api(project(":schema-installer-flyway"))
   api(project(":schema-installer-liquibase"))

@@ -1,4 +1,4 @@
-package com.stano.schema.importer;
+package com.stano.schema.reverseengineer;
 
 public record KeyDataColumn(String columnName, int ordinalPosition)
     implements Comparable<KeyDataColumn> {

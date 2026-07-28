@@ -14,7 +14,7 @@ rootProject.name = "schema"
 include("schema-bom")
 include("schema-diagram-generator")
 include("schema-diff")
-include("schema-importer")
+include("schema-reverse-engineer")
 include("schema-installer")
 include("schema-installer-flyway")
 include("schema-installer-liquibase")

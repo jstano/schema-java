@@ -127,7 +127,7 @@ dependencies {
 | **schema-installer-flyway** | Concrete installer using Flyway (with SQL Server support) |
 | **schema-installer-liquibase** | Concrete installer using Liquibase |
 | **schema-migrations** | JDBC utility helpers for migration scripts (existence checks, safe drops, etc.) |
-| **schema-importer** | Reverse-engineers an existing database into XML schema format |
+| **schema-reverse-engineer** | Reverse-engineers an existing database into XML schema format |
 | **schema-diagram-generator** | Generates ER diagrams in Mermaid and PlantUML formats |
 | **schema-bom** | Bill of Materials for version-aligned dependency management |
 

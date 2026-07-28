@@ -1,4 +1,4 @@
-package com.stano.schema.importer;
+package com.stano.schema.reverseengineer;
 
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;

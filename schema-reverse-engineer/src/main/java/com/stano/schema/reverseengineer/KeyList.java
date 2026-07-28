@@ -1,4 +1,4 @@
-package com.stano.schema.importer;
+package com.stano.schema.reverseengineer;
 
 import java.util.List;
 import java.util.Map;

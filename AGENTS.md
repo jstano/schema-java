@@ -54,7 +54,7 @@ All modules are under the `com.stano.schema` package. **Important:** The last th
 | `schema-installer-flyway` | Concrete `SchemaInstaller` implementation using Flyway for live database installation. |
 | `schema-installer-liquibase` | Concrete `SchemaInstaller` implementation using Liquibase for live database installation. |
 | `schema-migrations` | JDBC utility helpers: `MigrationServices`, table existence checks, safe drops, migration tracking. |
-| `schema-importer` | Reverse-engineers a live database schema into XML using JDBC metadata. |
+| `schema-reverse-engineer` | Reverse-engineers a live database schema into XML using JDBC metadata. |
 | `schema-diagram-generator` | Generates ER diagrams in Mermaid and PlantUML formats. Per-format implementations in `impl/`. |
 | `schema-bom` | Bill of Materials (BOM) for version-aligned dependency management. |
 | `schema-platform-dependencies` | Internal platform BOM defining third-party version constraints. |
@@ -84,7 +84,7 @@ Use `com.stano.schema.*` with clear domain hierarchy. Per-module packages:
 - `com.stano.schema.gensql` — SQL generation (with `impl.postgresql`, `impl.mysql`, etc. sub-packages for dialects)
 - `com.stano.schema.installer` — schema installation
 - `com.stano.schema.migrations` — migration utilities
-- `com.stano.schema.importer` — reverse-engineering
+- `com.stano.schema.reverseengineer` — reverse-engineering
 - `com.stano.schema.gendiagram` — diagram generation
 
 ### Code Style

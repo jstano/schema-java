@@ -18,7 +18,7 @@ val moduleDescriptions = mapOf(
   "schema-installer-flyway" to "Flyway schema installer",
   "schema-installer-liquibase" to "Liquibase schema installer",
   "schema-migrations" to "Migration helper classes",
-  "schema-importer" to "Creates schema xml files from relational database schemas.",
+  "schema-reverse-engineer" to "Reverse-engineers a live database schema into XML.",
   "schema-diagram-generator" to "Generates ER diagrams (Mermaid, PlantUML) from the schema model.",
   "schema-diff" to "Computes structural differences between two Schema models and produces a ChangeSet.",
   "schema-migration-generator" to "Generates SQL migration scripts from a ChangeSet for multiple database dialects.",

@@ -1,4 +1,4 @@
-package com.stano.schema.importer;
+package com.stano.schema.reverseengineer;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -8,7 +8,7 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 
-public class SchemaImporter {
+public class SchemaReverseEngineer {
   public static void main(String[] args) {
     try {
       var options = new Options();
