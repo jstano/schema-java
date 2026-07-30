@@ -6,7 +6,7 @@ pluginManagement {
 }
 
 plugins {
-  id("com.stano.settings") version "0.1.8"
+  id("com.stano.settings") version "0.1.9"
 }
 
 rootProject.name = "schema"

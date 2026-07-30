@@ -1,13 +1,10 @@
 import com.stano.gradle.mavencentralpublish.MavenCentralPublishExtension
 
 plugins {
-  id("com.stano.base")
+  id("com.stano.library")
   id("com.stano.sonar")
   id("com.stano.maven-central-publish") apply false
   id("com.stano.java-library") apply false
-  id("java-library")
-  id("maven-publish")
-  id("jacoco")
 }
 
 val moduleDescriptions = mapOf(
@@ -28,7 +25,6 @@ val moduleDescriptions = mapOf(
 configure(javaProjects()) {
   apply(plugin = "com.stano.java-library")
   apply(plugin = "com.stano.maven-central-publish")
-  apply(plugin = "groovy")
 
   configurations {
     all {

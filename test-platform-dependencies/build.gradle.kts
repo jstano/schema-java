@@ -1,5 +1,5 @@
 plugins {
-  id("java-library")
+  id("com.stano.java-library")
 }
 
 dependencies {

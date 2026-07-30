@@ -110,25 +110,17 @@ Enforced by `.editorconfig`:
 
 ## Testing Conventions
 
-### Test Framework Dual-Stack
-
-**Java Unit Tests** (`*Test.java` in `src/test/java/`)
+### Java Unit Tests (`*Test.java` in `src/test/java/`)
 - Framework: JUnit 5 (Jupiter) + Mockito
 - Annotation: `@DisplayName` on every test class and method (natural language sentences describing intent in camelCase)
 - Parameterization: `@ParameterizedTest` with `@CsvSource` for table-driven assertions
 - Mocking: `@Mock`, `@ExtendWith(MockitoExtension.class)` for behavior verification
 - Assertions: JUnit 5 `Assertions` or Hamcrest matchers
 
-**Groovy Integration Tests** (`*Spec.groovy` in `src/test/groovy/`)
-- Framework: Spock Framework (2.4 with Groovy 4.0)
-- Style: Given-When-Then blocks for behavioral specifications
-- Mocking: Spock's native mocking (no Mockito needed)
-- Fixtures: XML schema files in `src/test/resources/` used as golden fixtures
-
 ### Test Execution
-- **Both test types run under JUnit Platform:** `useJUnitPlatform()` configured in the convention plugin
-- **JVM Args for Tests:** `--add-opens java.base/java.lang.reflect` and `java.base/java.lang` (required by Mockito/Groovy)
-- **Code Coverage:** JaCoCo HTML and XML reports generated for both Java and Groovy tests
+- **Run under JUnit Platform:** `useJUnitPlatform()` configured in the convention plugin
+- **JVM Args for Tests:** `--add-opens java.base/java.lang.reflect` and `java.base/java.lang` (required by Mockito)
+- **Code Coverage:** JaCoCo HTML and XML reports generated per module and aggregated at the root (`jacocoRootReport`)
 
 ---
 

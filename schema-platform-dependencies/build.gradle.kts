@@ -24,7 +24,6 @@ dependencies {
     api("org.apache.commons:commons-lang3:3.20.0")
     api("org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r")
     api("org.apache.commons:commons-text:1.15.0")
-    api("org.apache.groovy:groovy-all:4.0.32")
     api("org.flywaydb:flyway-core:12.8.1")
     api("org.flywaydb:flyway-database-postgresql:12.8.1")
     api("org.flywaydb:flyway-sqlserver:12.8.1")
@@ -37,7 +36,6 @@ dependencies {
     api("org.slf4j:jul-to-slf4j:2.0.18")
     api("org.slf4j:log4j-over-slf4j:2.0.18")
     api("org.slf4j:slf4j-api:2.0.18")
-    api("org.spockframework:spock-core:2.4-groovy-4.0")
     api("uk.org.lidalia:sysout-over-slf4j:1.0.2")
   }
 }
