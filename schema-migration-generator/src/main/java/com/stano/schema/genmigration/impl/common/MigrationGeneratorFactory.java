@@ -5,8 +5,23 @@ import com.stano.schema.genmigration.impl.postgresql.PostgreSQLMigrationGenerato
 import com.stano.schema.genmigration.impl.sqlserver.SQLServerMigrationGenerator;
 import com.stano.schema.model.DatabaseType;
 
+/**
+ * Factory that selects and instantiates the dialect-specific {@link MigrationGenerator}
+ * implementation matching a given {@link DatabaseType}.
+ */
 public class MigrationGeneratorFactory {
 
+  /**
+   * Creates the {@link MigrationGenerator} implementation matching the database type carried by the
+   * given options.
+   *
+   * @param options the options (including target {@link DatabaseType}) to configure the generator
+   *     with
+   * @return a {@link PostgreSQLMigrationGenerator}, {@link H2MigrationGenerator}, or {@link
+   *     SQLServerMigrationGenerator}, depending on {@link
+   *     MigrationGeneratorOptions#getDatabaseType()}
+   * @throws IllegalArgumentException if the options' database type is not supported
+   */
   public MigrationGenerator createGenerator(MigrationGeneratorOptions options) {
     DatabaseType databaseType = options.getDatabaseType();
     switch (databaseType) {

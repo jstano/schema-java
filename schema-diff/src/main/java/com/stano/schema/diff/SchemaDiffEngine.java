@@ -31,8 +31,45 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Compares two {@link Schema} objects and produces an ordered {@link ChangeSet} describing the
+ * structural differences between them.
+ *
+ * <p>Matching between the old and new schema is done by name: tables, columns, views, and keys are
+ * matched by their name (and, for functions/procedures, by name plus {@code DatabaseType}); keys,
+ * constraints, and relations are matched structurally (e.g. by column list, SQL text, or from/to
+ * table and column) rather than by an identifier. Anything present in {@code oldSchema} but absent
+ * from {@code newSchema} (by these matching rules) is reported as a drop; anything present in
+ * {@code newSchema} but absent from {@code oldSchema} is reported as an add.
+ *
+ * <p>When a dropped column has no like-named counterpart in the new table but a same-typed,
+ * otherwise-unmatched column exists there, its name is recorded as a rename candidate on the
+ * resulting {@code DropColumnChange} (see {@link
+ * com.stano.schema.diff.change.DropColumnChange#getRenameCandidates()}) as a hint for callers. This
+ * is advisory only: the engine does not itself emit {@code RenameColumnChange} or {@code
+ * RenameTableChange} instances — a same-named column/table is always treated as unchanged (or, if
+ * its definition differs, as a {@code ModifyColumnChange}), and a removed name paired with an added
+ * name is always reported as a separate drop and add rather than collapsed into a rename.
+ *
+ * <p>Views, functions, and procedures whose SQL text differs between the two schemas are reported
+ * as a drop of the old definition followed by an add of the new one, rather than as a modify.
+ */
 public class SchemaDiffEngine {
 
+  /**
+   * Compares {@code oldSchema} against {@code newSchema} and returns the ordered set of changes
+   * needed to transform the former into the latter.
+   *
+   * <p>Changes are emitted in two phases so that dependent objects are removed before their
+   * dependencies and created after theirs: a drop phase, in the order views, functions, procedures,
+   * relations, keys, constraints, columns, then tables; followed by an add phase, in the order
+   * tables, columns, column modifications, keys, constraints, relations, functions, procedures,
+   * then views.
+   *
+   * @param oldSchema the baseline schema (the "before" state)
+   * @param newSchema the target schema (the "after" state)
+   * @return an ordered {@link ChangeSet} of the differences, empty if the schemas are equivalent
+   */
   public ChangeSet diff(Schema oldSchema, Schema newSchema) {
     ChangeSet changeSet = new ChangeSet();
 

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "schema-java",
+  "description": "Vendor-neutral relational database schema library for Java: XML schema definitions, multi-dialect SQL DDL generation (PostgreSQL, SQL Server, H2), live database installation via Flyway or Liquibase, database reverse-engineering, schema diffing and migration SQL generation, and ER diagram generation.",
+  "folders": [],
+  "excludeFolders": ["docs/plans", "**/build", "**/.gradle", "**/.idea", "**/.serena"],
+  "excludeFiles": ["bugs.md", "session-log.md", "context-snapshot.json"],
+  "rules": [
+    "Pin third-party and schema-* module versions via the schema-bom platform BOM; do not declare version numbers directly in consuming build files.",
+    "Generate dialect-specific DDL via SQLGeneratorFactory and SQLGeneratorOptions, not by instantiating dialect generator classes directly.",
+    "Install schemas into a live database via a SchemaInstaller implementation (FlywaySchemaInstaller or LiquibaseSchemaInstaller), not by running generated DDL manually.",
+    "Schema comparison (schema-diff) produces a ChangeSet model, not SQL directly; generate migration SQL from the reviewed ChangeSet via schema-migration-generator's MigrationGeneratorFactory."
+  ]
+}

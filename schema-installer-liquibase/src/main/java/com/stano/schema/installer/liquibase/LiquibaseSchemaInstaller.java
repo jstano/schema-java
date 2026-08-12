@@ -9,6 +9,14 @@ import java.sql.Connection;
 import java.util.List;
 import java.util.logging.Logger;
 
+/**
+ * {@link SchemaInstaller} implementation that generates and executes SQL, and runs migration
+ * scripts, using <a href="https://www.liquibase.org/">Liquibase</a>.
+ *
+ * <p>Generated SQL is wrapped in a temporary Liquibase changelog before being executed. When no
+ * explicit migration script locator is supplied by the {@code SchemaContext}, migration scripts are
+ * looked up on the classpath at {@code db/changelog/db.changelog-master.xml}.
+ */
 public class LiquibaseSchemaInstaller extends SchemaInstaller {
   private static final Logger log = Logger.getLogger(LiquibaseSchemaInstaller.class.getName());
 

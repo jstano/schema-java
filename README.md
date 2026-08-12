@@ -25,7 +25,6 @@ Create `src/main/resources/db/my-schema.xml`:
 <database xmlns="http://stano.com/database"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://stano.com/database http://schema.stano.com/schema.xsd"
-          version="1.0"
           foreignKeyMode="relations"
           booleanMode="native">
 
@@ -101,7 +100,7 @@ Add to `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation(platform("com.stano:schema-bom:0.9.11"))
+    implementation(platform("com.stano:schema-bom:0.54.0"))
     implementation("com.stano:schema-parser")
     implementation("com.stano:schema-sql-generator")
 }
@@ -111,8 +110,8 @@ Or use a specific installer:
 
 ```kotlin
 dependencies {
-    implementation("com.stano:schema-installer-flyway:0.9.11")
-    implementation("com.stano:schema-installer-liquibase:0.9.11")
+    implementation("com.stano:schema-installer-flyway:0.54.0")
+    implementation("com.stano:schema-installer-liquibase:0.54.0")
 }
 ```
 
@@ -129,7 +128,40 @@ dependencies {
 | **schema-migrations** | JDBC utility helpers for migration scripts (existence checks, safe drops, etc.) |
 | **schema-reverse-engineer** | Reverse-engineers an existing database into XML schema format |
 | **schema-diagram-generator** | Generates ER diagrams in Mermaid and PlantUML formats |
+| **schema-diff** | Compares two `Schema` objects and produces a `ChangeSet` describing structural differences (added/dropped/renamed tables, columns, keys, constraints, relations, views, functions, procedures) |
+| **schema-diff-git** | CLI (`GitSchemaDiffCli`) that reads and diffs schema XML across git revisions/tags |
+| **schema-migration-generator** | Generates dialect-specific `ALTER`/`CREATE`/`DROP` migration SQL from a `ChangeSet` (PostgreSQL, SQL Server, H2) |
 | **schema-bom** | Bill of Materials for version-aligned dependency management |
+
+## Schema Diff & Migration
+
+For an existing database whose schema needs to evolve to match a new XML definition, `schema-diff` and `schema-migration-generator` provide a state-based migration workflow: compare two schema versions in memory, then generate dialect-specific migration SQL from the resulting changeset.
+
+### 1. Compare two schema versions
+
+```java
+Schema oldSchema = new SchemaParser().parseSchema(new File("schema-v1.xml").toURI().toURL());
+Schema newSchema = new SchemaParser().parseSchema(new File("schema-v2.xml").toURI().toURL());
+
+ChangeSet changeSet = new SchemaDiffEngine().diff(oldSchema, newSchema);
+```
+
+### 2. Generate migration SQL from the changeset
+
+```java
+new GenMigration().generateMigrationSQL(
+    DatabaseType.POSTGRESQL, changeSet, new PrintWriter(new FileWriter("migration-postgres.sql")));
+```
+
+The diff engine always emits a drop+add pair for column renames; when it detects a plausible rename target it adds a `-- TODO: possible rename?` comment with the equivalent `ALTER TABLE ... RENAME COLUMN` above the drop+add in the generated SQL, for you to resolve manually.
+
+### Diffing straight from git history
+
+`schema-diff-git` combines both steps into one CLI command — it compares the version of a schema file at the last git commit against its current working-tree contents and writes migration SQL directly:
+
+```bash
+java -cp ... com.stano.schema.git.GitSchemaDiffCli my-schema.xml -d postgresql -o migration.sql
+```
 
 ## XML Schema Format
 
@@ -240,6 +272,7 @@ java -cp ... com.stano.schema.gensql.GenSQL postgres,sqlserver schema.xml \
 - `--boolean-mode` — `native`, `yes_no`, `yn` (default: from XML or `native`)
 - `--output-indexes-only` — generate only index DDL
 - `--output-triggers-only` — generate only trigger DDL
+- `--postgresql-version` — target PostgreSQL major version (e.g. `17`, `18`)
 
 Produces files like `schema-postgres.sql`, `schema-sqlserver.sql`, `schema-h2.sql` alongside the input file.
 

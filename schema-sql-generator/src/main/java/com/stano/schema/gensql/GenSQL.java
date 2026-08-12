@@ -16,9 +16,42 @@ import java.net.URI;
 import java.net.URL;
 import org.apache.commons.io.IOUtils;
 
+/**
+ * Main entry point for generating SQL DDL from a parsed {@link Schema}.
+ *
+ * <p>This class can be used as a plain library class, by calling one of the {@code
+ * generateSQL(...)} overloads directly with an already-parsed {@link Schema}, or run as a
+ * command-line tool via {@link #main(String[])}:
+ *
+ * <pre>{@code
+ * java -cp ... com.stano.schema.gensql.GenSQL <target-database> <schema-filename>
+ *     [--foreign-key-mode=mode] [--boolean-mode=mode] [--output-indexes-only]
+ *     [--output-triggers-only] [--postgresql-version=N]
+ * }</pre>
+ *
+ * <p>where {@code <target-database>} is a comma-separated list of one or more of {@code H2}, {@code
+ * POSTGRESQL}, or {@code SQL_SERVER}. For each target database, an output file named {@code
+ * <schema-filename-without-extension>-<database-name>.sql} is written alongside the input schema
+ * file.
+ */
 public class GenSQL {
+
+  /** Factory used to obtain the {@link SQLGenerator} implementation for a given database type. */
   public SQLGeneratorFactory sqlGeneratorFactory = new SQLGeneratorFactory();
 
+  /**
+   * Generates SQL DDL for the given schema and writes it to the supplied writer, using the default
+   * target PostgreSQL version.
+   *
+   * @param databaseType the database dialect to generate SQL for
+   * @param schema the parsed schema to generate SQL from
+   * @param writer the writer to which the generated SQL is written; it is closed once generation
+   *     completes (successfully or not)
+   * @param foreignKeyMode how foreign keys should be expressed in the generated SQL
+   * @param booleanMode how boolean columns should be expressed in the generated SQL
+   * @param outputMode which parts of the schema should be output
+   * @param statementSeparator the separator written after each generated SQL statement
+   */
   public void generateSQL(
       DatabaseType databaseType,
       Schema schema,
@@ -45,6 +78,18 @@ public class GenSQL {
     }
   }
 
+  /**
+   * Generates SQL DDL for the given schema and writes it to the supplied writer, outputting all
+   * parts of the schema (equivalent to passing {@link OutputMode#ALL}).
+   *
+   * @param databaseType the database dialect to generate SQL for
+   * @param schema the parsed schema to generate SQL from
+   * @param writer the writer to which the generated SQL is written; it is closed once generation
+   *     completes (successfully or not)
+   * @param foreignKeyMode how foreign keys should be expressed in the generated SQL
+   * @param booleanMode how boolean columns should be expressed in the generated SQL
+   * @param statementSeparator the separator written after each generated SQL statement
+   */
   public void generateSQL(
       DatabaseType databaseType,
       Schema schema,
@@ -62,6 +107,18 @@ public class GenSQL {
         statementSeparator);
   }
 
+  /**
+   * Generates SQL DDL for the given schema and writes it to the supplied writer, using the database
+   * type's default statement separator and the default target PostgreSQL version.
+   *
+   * @param databaseType the database dialect to generate SQL for
+   * @param schema the parsed schema to generate SQL from
+   * @param writer the writer to which the generated SQL is written; it is closed once generation
+   *     completes (successfully or not)
+   * @param foreignKeyMode how foreign keys should be expressed in the generated SQL
+   * @param booleanMode how boolean columns should be expressed in the generated SQL
+   * @param outputMode which parts of the schema should be output
+   */
   public void generateSQL(
       DatabaseType databaseType,
       Schema schema,
@@ -80,6 +137,20 @@ public class GenSQL {
         0);
   }
 
+  /**
+   * Generates SQL DDL for the given schema and writes it to the supplied writer.
+   *
+   * @param databaseType the database dialect to generate SQL for
+   * @param schema the parsed schema to generate SQL from
+   * @param writer the writer to which the generated SQL is written; it is closed once generation
+   *     completes (successfully or not)
+   * @param foreignKeyMode how foreign keys should be expressed in the generated SQL
+   * @param booleanMode how boolean columns should be expressed in the generated SQL
+   * @param outputMode which parts of the schema should be output
+   * @param statementSeparator the separator written after each generated SQL statement
+   * @param targetPostgresVersion the target PostgreSQL major version (e.g. 17, 18), or {@code 0} to
+   *     use the default
+   */
   public void generateSQL(
       DatabaseType databaseType,
       Schema schema,
@@ -122,6 +193,31 @@ public class GenSQL {
     return schemaFileName;
   }
 
+  /**
+   * Command-line entry point that parses an XML schema file and generates SQL DDL for one or more
+   * target databases.
+   *
+   * <p>Expected usage: {@code GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]
+   * [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]
+   * [--postgresql-version=N]}
+   *
+   * <ul>
+   *   <li>{@code <target-database>} — one or more of {@code H2}, {@code POSTGRESQL}, {@code
+   *       SQL_SERVER}, separated by commas
+   *   <li>{@code --foreign-key-mode=mode} — one of {@code none}, {@code relations}, {@code
+   *       triggers}; defaults to the mode declared in the schema file
+   *   <li>{@code --boolean-mode=mode} — one of {@code native}, {@code yes_no}, {@code yn}; defaults
+   *       to the mode declared in the schema file
+   *   <li>{@code --output-indexes-only} — output only index DDL
+   *   <li>{@code --output-triggers-only} — output only trigger DDL
+   *   <li>{@code --postgresql-version=N} — the target PostgreSQL major version (e.g. 17, 18)
+   * </ul>
+   *
+   * <p>If fewer than two arguments are supplied, a usage message is printed and the JVM exits with
+   * status {@code 1}. Any exception raised during processing is printed to standard error.
+   *
+   * @param args the command-line arguments, as described above
+   */
   public static void main(String[] args) {
     try {
       if (args.length < 2) {

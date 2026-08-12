@@ -1,3 +1,5 @@
+rootProject.name = "schema"
+
 pluginManagement {
   repositories {
     mavenLocal()
@@ -6,10 +8,8 @@ pluginManagement {
 }
 
 plugins {
-  id("com.stano.settings") version "0.1.9"
+  id("com.stano.settings") version "0.1.12"
 }
-
-rootProject.name = "schema"
 
 include("schema-bom")
 include("schema-diagram-generator")

@@ -12,13 +12,32 @@ import java.io.PrintWriter;
 import java.util.List;
 import org.apache.commons.text.StringEscapeUtils;
 
+/**
+ * Serializes a {@link Schema} model to the vendor-neutral XML schema definition format understood
+ * by the rest of the library (the {@code http://stano.com/database} namespace).
+ *
+ * <p>The generated document contains a {@code <table>} element for each table in the schema,
+ * including its columns, primary/unique/index keys, relations, and check constraints, in the order
+ * they appear on the {@link Table} model.
+ */
 public class SchemaWriter {
   private final PrintWriter out;
 
+  /**
+   * Creates a writer that serializes schemas to the given output.
+   *
+   * @param out the writer that the generated XML is printed to
+   */
   public SchemaWriter(PrintWriter out) {
     this.out = out;
   }
 
+  /**
+   * Writes the given schema as a complete XML document, including the XML declaration and the root
+   * {@code <database>} element containing one {@code <table>} element per table.
+   *
+   * @param schema the schema to serialize
+   */
   public void outputSchema(Schema schema) {
     out.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
     out.println(
