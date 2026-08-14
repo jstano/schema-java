@@ -10,6 +10,8 @@ import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;
 import com.stano.schema.gensql.impl.common.TableGenerator;
 import com.stano.schema.gensql.impl.common.TriggerGenerator;
 import com.stano.schema.gensql.impl.common.ViewGenerator;
+import com.stano.schema.model.EnumType;
+import java.util.Comparator;
 
 public class PostgreSQLGenerator extends SQLGenerator {
 
@@ -158,7 +160,12 @@ public class PostgreSQLGenerator extends SQLGenerator {
       return;
     }
 
-    for (var enumType : schema.getEnumTypes()) {
+    var sortedEnumTypes =
+        schema.getEnumTypes().stream()
+            .sorted(Comparator.comparing(EnumType::getName, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+
+    for (var enumType : sortedEnumTypes) {
       String enumName = enumType.getName().replaceAll("(?<=[a-z0-9])([A-Z])", "_$1").toLowerCase();
       sqlWriter.println("drop type if exists " + enumName + " cascade" + statementSeparator);
 

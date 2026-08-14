@@ -9,6 +9,7 @@ import com.stano.schema.model.AggregationFrequency;
 import com.stano.schema.model.AggregationType;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.ForeignKeyMode;
 import com.stano.schema.model.KeyType;
 import com.stano.schema.model.LockEscalation;
 import com.stano.schema.model.OtherSqlOrder;
@@ -39,6 +40,10 @@ class SchemaParserTest {
     Table unitTable = schema.getTable("Unit");
 
     assertEquals(schema.getTables().size(), 8);
+    assertEquals(
+        schema.getForeignKeyMode(),
+        ForeignKeyMode.RELATIONS,
+        "schema without a foreignKeyMode attribute should default to RELATIONS");
 
     verifyParentTable(parentTable);
     verifyChildTable(childTable);

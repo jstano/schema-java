@@ -182,7 +182,9 @@ public class GenSQL {
   private static File createOutputFile(String schemaFilename, DatabaseType databaseType) {
     String baseFilename = schemaFilename.substring(0, schemaFilename.lastIndexOf('.'));
 
-    return new File(String.format("%s-%s.sql", baseFilename, databaseType.name().toLowerCase()));
+    return new File(
+        String.format(
+            "%s-%s.sql", baseFilename, databaseType.name().toLowerCase().replace("_", "")));
   }
 
   private static String getSchemaFileName(String schemaFileName) {

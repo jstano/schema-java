@@ -28,7 +28,7 @@ public class Schema {
   private final List<OtherSql> otherSql = new ArrayList<>();
   private final Map<String, Table> tableMap = new CaseInsensitiveMap<>();
   private final Map<String, EnumType> enumTypes = new HashMap<>();
-  private ForeignKeyMode foreignKeyMode;
+  private ForeignKeyMode foreignKeyMode = ForeignKeyMode.RELATIONS;
   private BooleanMode booleanMode = BooleanMode.NATIVE;
   private boolean caseSensitiveText = true;
 

@@ -2,7 +2,6 @@ package com.stano.schema.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,12 +25,12 @@ class SchemaTest {
 
     assertEquals(schema.getSchemaURL(), url);
     assertEquals(schema.getBooleanMode(), BooleanMode.NATIVE);
-    assertNull(schema.getForeignKeyMode());
+    assertEquals(schema.getForeignKeyMode(), ForeignKeyMode.RELATIONS);
 
-    schema.setForeignKeyMode(ForeignKeyMode.RELATIONS);
+    schema.setForeignKeyMode(ForeignKeyMode.NONE);
     schema.setBooleanMode(BooleanMode.YN);
 
-    assertEquals(schema.getForeignKeyMode(), ForeignKeyMode.RELATIONS);
+    assertEquals(schema.getForeignKeyMode(), ForeignKeyMode.NONE);
     assertEquals(schema.getBooleanMode(), BooleanMode.YN);
   }
 
