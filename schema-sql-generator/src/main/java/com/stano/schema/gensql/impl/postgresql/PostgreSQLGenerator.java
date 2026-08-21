@@ -42,7 +42,9 @@ public class PostgreSQLGenerator extends SQLGenerator {
   protected void outputHeader() {
 
     createUUIDGeneratorFunction();
-    createExtensions();
+    if (getSqlGeneratorOptions().isEmitPostgresExtensions()) {
+      createExtensions();
+    }
     createEnumTypes();
   }
 
@@ -107,32 +109,32 @@ public class PostgreSQLGenerator extends SQLGenerator {
     }
 
     sqlWriter.println(
-        "create or replace function generate_uuid() returns uuid language plpgsql parallel safe as"
-            + " $$");
+        "create or replace function generate_uuid() returns uuid language plpgsql volatile"
+            + " parallel unsafe as $$");
     sqlWriter.println("declare");
     sqlWriter.println("   -- The current UNIX timestamp in milliseconds");
     sqlWriter.println(
-        "   unix_time_ms CONSTANT bytea NOT NULL DEFAULT substring(int8send((extract(epoch FROM"
-            + " clock_timestamp()) * 1000)::bigint) from 3);");
+        "   unix_time_ms CONSTANT bigint NOT NULL DEFAULT (extract(epoch FROM clock_timestamp())"
+            + " * 1000)::bigint;");
     sqlWriter.println();
     sqlWriter.println(
-        "   -- The buffer used to create the UUID, starting with the UNIX timestamp and followed by"
-            + " random bytes");
-    sqlWriter.println("   buffer bytea not null default unix_time_ms || gen_random_bytes(10);");
+        "   -- The buffer used to create the UUID: the low 6 bytes (48 bits) of the timestamp,"
+            + " followed by 10 random bytes");
+    sqlWriter.println(
+        "   buffer bytea not null default substring(int8send(unix_time_ms) from 3) ||"
+            + " gen_random_bytes(10);");
     sqlWriter.println("begin");
     sqlWriter.println(
-        "   -- Set most significant 4 bits of 7th byte to 7 (for UUID v7), keeping the last 4 bits"
+        "   -- Set the version nibble of byte 6 to 0111 (UUID v7), keeping the last 4 bits"
             + " unchanged");
-    sqlWriter.println(
-        "   buffer = set_byte(buffer, 6, (b'0111' || get_byte(buffer, 6)::bit(4))::bit(8)::int);");
+    sqlWriter.println("   buffer = set_byte(buffer, 6, (get_byte(buffer, 6) & 15) | 112);");
     sqlWriter.println();
     sqlWriter.println(
-        "   -- Set most significant 2 bits of 9th byte to 2 (the UUID variant specified in RFC"
-            + " 4122), keeping the last 6 bits unchanged");
-    sqlWriter.println(
-        "   buffer = set_byte(buffer, 8, (b'10' || get_byte(buffer, 8)::bit(6))::bit(8)::int);");
+        "   -- Set the top 2 bits of byte 8 to 10 (the UUID variant specified in RFC 4122),"
+            + " keeping the last 6 bits unchanged");
+    sqlWriter.println("   buffer = set_byte(buffer, 8, (get_byte(buffer, 8) & 63) | 128);");
     sqlWriter.println();
-    sqlWriter.println("   return encode(buffer, 'hex');");
+    sqlWriter.println("   return encode(buffer, 'hex')::uuid;");
     sqlWriter.println("end");
     sqlWriter.println("$$" + statementSeparator);
     sqlWriter.println();
@@ -140,9 +142,12 @@ public class PostgreSQLGenerator extends SQLGenerator {
 
   private void createExtensions() {
 
+    String checkUser = getSqlGeneratorOptions().getExtensionCheckUser();
+    String checkUserExpr = checkUser == null ? "CURRENT_USER" : "'" + checkUser + "'";
+
     sqlWriter.println("do $$");
     sqlWriter.println("begin");
-    sqlWriter.println("   if (select usesuper from pg_user where usename = CURRENT_USER) then");
+    sqlWriter.println("   if (select usesuper from pg_user where usename = " + checkUserExpr + ") then");
     sqlWriter.println("      create extension if not exists \"citext\";");
     sqlWriter.println("      create extension if not exists \"btree_gist\";");
     sqlWriter.println("   else");

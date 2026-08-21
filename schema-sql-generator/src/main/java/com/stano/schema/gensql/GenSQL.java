@@ -26,7 +26,8 @@ import org.apache.commons.io.IOUtils;
  * <pre>{@code
  * java -cp ... com.stano.schema.gensql.GenSQL <target-database> <schema-filename>
  *     [--foreign-key-mode=mode] [--boolean-mode=mode] [--output-indexes-only]
- *     [--output-triggers-only] [--postgresql-version=N]
+ *     [--output-triggers-only] [--postgresql-version=N] [--no-postgres-extensions]
+ *     [--extension-check-user=name]
  * }</pre>
  *
  * <p>where {@code <target-database>} is a comma-separated list of one or more of {@code H2}, {@code
@@ -160,6 +161,86 @@ public class GenSQL {
       OutputMode outputMode,
       String statementSeparator,
       int targetPostgresVersion) {
+    generateSQL(
+        databaseType,
+        schema,
+        writer,
+        foreignKeyMode,
+        booleanMode,
+        outputMode,
+        statementSeparator,
+        targetPostgresVersion,
+        true);
+  }
+
+  /**
+   * Generates SQL DDL for the given schema and writes it to the supplied writer.
+   *
+   * @param databaseType the database dialect to generate SQL for
+   * @param schema the parsed schema to generate SQL from
+   * @param writer the writer to which the generated SQL is written; it is closed once generation
+   *     completes (successfully or not)
+   * @param foreignKeyMode how foreign keys should be expressed in the generated SQL
+   * @param booleanMode how boolean columns should be expressed in the generated SQL
+   * @param outputMode which parts of the schema should be output
+   * @param statementSeparator the separator written after each generated SQL statement
+   * @param targetPostgresVersion the target PostgreSQL major version (e.g. 17, 18), or {@code 0} to
+   *     use the default
+   * @param emitPostgresExtensions whether to emit the PostgreSQL {@code create extension} block
+   *     (citext, btree_gist); ignored for non-PostgreSQL dialects
+   */
+  public void generateSQL(
+      DatabaseType databaseType,
+      Schema schema,
+      PrintWriter writer,
+      ForeignKeyMode foreignKeyMode,
+      BooleanMode booleanMode,
+      OutputMode outputMode,
+      String statementSeparator,
+      int targetPostgresVersion,
+      boolean emitPostgresExtensions) {
+    generateSQL(
+        databaseType,
+        schema,
+        writer,
+        foreignKeyMode,
+        booleanMode,
+        outputMode,
+        statementSeparator,
+        targetPostgresVersion,
+        emitPostgresExtensions,
+        null);
+  }
+
+  /**
+   * Generates SQL DDL for the given schema and writes it to the supplied writer.
+   *
+   * @param databaseType the database dialect to generate SQL for
+   * @param schema the parsed schema to generate SQL from
+   * @param writer the writer to which the generated SQL is written; it is closed once generation
+   *     completes (successfully or not)
+   * @param foreignKeyMode how foreign keys should be expressed in the generated SQL
+   * @param booleanMode how boolean columns should be expressed in the generated SQL
+   * @param outputMode which parts of the schema should be output
+   * @param statementSeparator the separator written after each generated SQL statement
+   * @param targetPostgresVersion the target PostgreSQL major version (e.g. 17, 18), or {@code 0} to
+   *     use the default
+   * @param emitPostgresExtensions whether to emit the PostgreSQL {@code create extension} block
+   *     (citext, btree_gist); ignored for non-PostgreSQL dialects
+   * @param extensionCheckUser the Postgres role whose superuser privilege is checked in the create
+   *     extension block, or {@code null} to check {@code CURRENT_USER}
+   */
+  public void generateSQL(
+      DatabaseType databaseType,
+      Schema schema,
+      PrintWriter writer,
+      ForeignKeyMode foreignKeyMode,
+      BooleanMode booleanMode,
+      OutputMode outputMode,
+      String statementSeparator,
+      int targetPostgresVersion,
+      boolean emitPostgresExtensions,
+      String extensionCheckUser) {
     try {
       SQLGenerator sqlGenerator =
           sqlGeneratorFactory.createSQLGenerator(
@@ -171,7 +252,9 @@ public class GenSQL {
                   booleanMode,
                   outputMode,
                   statementSeparator,
-                  targetPostgresVersion));
+                  targetPostgresVersion,
+                  emitPostgresExtensions,
+                  extensionCheckUser));
 
       sqlGenerator.generate();
     } finally {
@@ -201,7 +284,7 @@ public class GenSQL {
    *
    * <p>Expected usage: {@code GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]
    * [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]
-   * [--postgresql-version=N]}
+   * [--postgresql-version=N] [--no-postgres-extensions] [--extension-check-user=name]}
    *
    * <ul>
    *   <li>{@code <target-database>} — one or more of {@code H2}, {@code POSTGRESQL}, {@code
@@ -213,6 +296,10 @@ public class GenSQL {
    *   <li>{@code --output-indexes-only} — output only index DDL
    *   <li>{@code --output-triggers-only} — output only trigger DDL
    *   <li>{@code --postgresql-version=N} — the target PostgreSQL major version (e.g. 17, 18)
+   *   <li>{@code --no-postgres-extensions} — skip emitting the PostgreSQL {@code create extension}
+   *       block (citext, btree_gist)
+   *   <li>{@code --extension-check-user=name} — the Postgres role whose superuser privilege is
+   *       checked in the create extension block; defaults to {@code CURRENT_USER}
    * </ul>
    *
    * <p>If fewer than two arguments are supplied, a usage message is printed and the JVM exits with
@@ -226,7 +313,8 @@ public class GenSQL {
         System.out.println(
             "USAGE: GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]"
                 + " [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]"
-                + " [--postgresql-version=N]");
+                + " [--postgresql-version=N] [--no-postgres-extensions]"
+                + " [--extension-check-user=name]");
         System.out.println(
             "   where <target-database> is one or more of: [H2,POSTGRESQL,SQL_SERVER] separated by"
                 + " commas");
@@ -240,6 +328,12 @@ public class GenSQL {
         System.out.println(
             "   and   <postgresql-version> is the target PostgreSQL major version (e.g., 17,"
                 + " 18)");
+        System.out.println(
+            "   and   <no-postgres-extensions> skips emitting the PostgreSQL create extension"
+                + " block (citext, btree_gist)");
+        System.out.println(
+            "   and   <extension-check-user> is the Postgres role whose superuser privilege is"
+                + " checked in the create extension block (default is CURRENT_USER)");
         System.exit(1);
       }
 
@@ -251,6 +345,8 @@ public class GenSQL {
       BooleanMode booleanMode = schema.getBooleanMode();
       OutputMode outputMode = OutputMode.ALL;
       int targetPostgresVersion = 0;
+      boolean emitPostgresExtensions = true;
+      String extensionCheckUser = null;
 
       for (String arg : args) {
         if (arg.startsWith("--foreign-key-mode=")) {
@@ -265,6 +361,10 @@ public class GenSQL {
           outputMode = OutputMode.TRIGGERS_ONLY;
         } else if (arg.startsWith("--postgresql-version=")) {
           targetPostgresVersion = Integer.parseInt(arg.substring("--postgresql-version=".length()));
+        } else if (arg.equals("--no-postgres-extensions")) {
+          emitPostgresExtensions = false;
+        } else if (arg.startsWith("--extension-check-user=")) {
+          extensionCheckUser = arg.substring("--extension-check-user=".length());
         }
       }
 
@@ -279,7 +379,9 @@ public class GenSQL {
             booleanMode,
             outputMode,
             databaseType.getStatementSeparator(),
-            targetPostgresVersion);
+            targetPostgresVersion,
+            emitPostgresExtensions,
+            extensionCheckUser);
       }
     } catch (Throwable x) {
       x.printStackTrace();

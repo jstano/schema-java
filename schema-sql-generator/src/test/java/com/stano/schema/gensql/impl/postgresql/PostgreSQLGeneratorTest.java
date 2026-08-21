@@ -73,6 +73,57 @@ class PostgreSQLGeneratorTest {
   }
 
   @Test
+  @DisplayName("omits create extension block when emitPostgresExtensions is false")
+  void omitsCreateExtensionBlockWhenDisabled() {
+    StringWriter sw = new StringWriter();
+    new PostgreSQLGenerator(
+            new SQLGeneratorOptions(
+                schema,
+                new PrintWriter(sw),
+                DatabaseType.POSTGRESQL,
+                ForeignKeyMode.RELATIONS,
+                BooleanMode.NATIVE,
+                OutputMode.ALL,
+                DatabaseType.POSTGRESQL.getStatementSeparator(),
+                0,
+                false))
+        .generate();
+    String sql = sw.toString();
+    assertFalse(sql.contains("create extension"), "should not include extension creation");
+  }
+
+  @Test
+  @DisplayName("checks CURRENT_USER's privilege by default")
+  void checksCurrentUserByDefault() {
+    String sql = generate(ForeignKeyMode.RELATIONS, BooleanMode.NATIVE);
+    assertTrue(
+        sql.contains("where usename = CURRENT_USER"), "should check CURRENT_USER by default");
+  }
+
+  @Test
+  @DisplayName("checks the configured extensionCheckUser's privilege when set")
+  void checksConfiguredExtensionUser() {
+    StringWriter sw = new StringWriter();
+    new PostgreSQLGenerator(
+            new SQLGeneratorOptions(
+                schema,
+                new PrintWriter(sw),
+                DatabaseType.POSTGRESQL,
+                ForeignKeyMode.RELATIONS,
+                BooleanMode.NATIVE,
+                OutputMode.ALL,
+                DatabaseType.POSTGRESQL.getStatementSeparator(),
+                0,
+                true,
+                "schema_admin"))
+        .generate();
+    String sql = sw.toString();
+    assertTrue(
+        sql.contains("where usename = 'schema_admin'"), "should check the configured role");
+    assertFalse(sql.contains("CURRENT_USER)"), "should not check CURRENT_USER");
+  }
+
+  @Test
   @DisplayName("generates CREATE INDEX for non-unique indexes")
   void generatesCreateIndexForNonUniqueIndexes() {
     String sql = generate(ForeignKeyMode.RELATIONS, BooleanMode.NATIVE);

@@ -1,18 +1,18 @@
-create or replace function generate_uuid() returns uuid language plpgsql parallel safe as $$
+create or replace function generate_uuid() returns uuid language plpgsql volatile parallel unsafe as $$
 declare
    -- The current UNIX timestamp in milliseconds
-   unix_time_ms CONSTANT bytea NOT NULL DEFAULT substring(int8send((extract(epoch FROM clock_timestamp()) * 1000)::bigint) from 3);
+   unix_time_ms CONSTANT bigint NOT NULL DEFAULT (extract(epoch FROM clock_timestamp()) * 1000)::bigint;
 
-   -- The buffer used to create the UUID, starting with the UNIX timestamp and followed by random bytes
-   buffer bytea not null default unix_time_ms || gen_random_bytes(10);
+   -- The buffer used to create the UUID: the low 6 bytes (48 bits) of the timestamp, followed by 10 random bytes
+   buffer bytea not null default substring(int8send(unix_time_ms) from 3) || gen_random_bytes(10);
 begin
-   -- Set most significant 4 bits of 7th byte to 7 (for UUID v7), keeping the last 4 bits unchanged
-   buffer = set_byte(buffer, 6, (b'0111' || get_byte(buffer, 6)::bit(4))::bit(8)::int);
+   -- Set the version nibble of byte 6 to 0111 (UUID v7), keeping the last 4 bits unchanged
+   buffer = set_byte(buffer, 6, (get_byte(buffer, 6) & 15) | 112);
 
-   -- Set most significant 2 bits of 9th byte to 2 (the UUID variant specified in RFC 4122), keeping the last 6 bits unchanged
-   buffer = set_byte(buffer, 8, (b'10' || get_byte(buffer, 8)::bit(6))::bit(8)::int);
+   -- Set the top 2 bits of byte 8 to 10 (the UUID variant specified in RFC 4122), keeping the last 6 bits unchanged
+   buffer = set_byte(buffer, 8, (get_byte(buffer, 8) & 63) | 128);
 
-   return encode(buffer, 'hex');
+   return encode(buffer, 'hex')::uuid;
 end
 $$;
 
