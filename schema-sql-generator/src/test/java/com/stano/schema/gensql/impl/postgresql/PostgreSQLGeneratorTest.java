@@ -118,8 +118,7 @@ class PostgreSQLGeneratorTest {
                 "schema_admin"))
         .generate();
     String sql = sw.toString();
-    assertTrue(
-        sql.contains("where usename = 'schema_admin'"), "should check the configured role");
+    assertTrue(sql.contains("where usename = 'schema_admin'"), "should check the configured role");
     assertFalse(sql.contains("CURRENT_USER)"), "should not check CURRENT_USER");
   }
 

@@ -283,8 +283,8 @@ public class GenSQL {
    * target databases.
    *
    * <p>Expected usage: {@code GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]
-   * [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]
-   * [--postgresql-version=N] [--no-postgres-extensions] [--extension-check-user=name]}
+   * [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only] [--postgresql-version=N]
+   * [--no-postgres-extensions] [--extension-check-user=name]}
    *
    * <ul>
    *   <li>{@code <target-database>} — one or more of {@code H2}, {@code POSTGRESQL}, {@code

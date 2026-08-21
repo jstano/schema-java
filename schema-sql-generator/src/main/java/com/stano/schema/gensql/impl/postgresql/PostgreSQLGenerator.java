@@ -147,7 +147,8 @@ public class PostgreSQLGenerator extends SQLGenerator {
 
     sqlWriter.println("do $$");
     sqlWriter.println("begin");
-    sqlWriter.println("   if (select usesuper from pg_user where usename = " + checkUserExpr + ") then");
+    sqlWriter.println(
+        "   if (select usesuper from pg_user where usename = " + checkUserExpr + ") then");
     sqlWriter.println("      create extension if not exists \"citext\";");
     sqlWriter.println("      create extension if not exists \"btree_gist\";");
     sqlWriter.println("   else");
