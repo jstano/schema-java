@@ -14,6 +14,7 @@ import com.stano.schema.diff.change.DropKeyChange;
 import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
+import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Constraint;
@@ -478,5 +479,204 @@ class SchemaDiffEngineTest {
     ChangeSet changeSet = engine.diff(oldSchema, newSchema);
 
     assertTrue(changeSet.isEmpty());
+  }
+
+  @Test
+  @DisplayName("detects relation type change")
+  void detectsRelationTypeChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "orders", null, null, false);
+    oldTable.getColumns().add(new Column("customer_id", ColumnType.INT, 0, false));
+    oldTable
+        .getRelations()
+        .add(new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "orders", null, null, false);
+    newTable.getColumns().add(new Column("customer_id", ColumnType.INT, 0, false));
+    newTable
+        .getRelations()
+        .add(new Relation("orders", "customer_id", "customers", "id", RelationType.SETNULL, false));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c ->
+                    c instanceof com.stano.schema.diff.change.DropRelationChange drop
+                        && drop.getRelation().getType() == RelationType.CASCADE));
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c ->
+                    c instanceof com.stano.schema.diff.change.AddRelationChange add
+                        && add.getRelation().getType() == RelationType.SETNULL));
+  }
+
+  @Test
+  @DisplayName("no relation change when type matches")
+  void noRelationChangeWhenTypeMatches() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "orders", null, null, false);
+    oldTable.getColumns().add(new Column("customer_id", ColumnType.INT, 0, false));
+    oldTable
+        .getRelations()
+        .add(new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "orders", null, null, false);
+    newTable.getColumns().add(new Column("customer_id", ColumnType.INT, 0, false));
+    newTable
+        .getRelations()
+        .add(new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(changeSet.isEmpty());
+  }
+
+  @Test
+  @DisplayName("detects key uniqueness change")
+  void detectsKeyUniquenessChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "users", null, null, false);
+    oldTable.getColumns().add(new Column("email", ColumnType.VARCHAR, 255, false));
+    List<KeyColumn> oldCols = new ArrayList<>();
+    oldCols.add(new KeyColumn("email"));
+    oldTable.getIndexes().add(new Key(KeyType.INDEX, oldCols, false, false, false, null));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "users", null, null, false);
+    newTable.getColumns().add(new Column("email", ColumnType.VARCHAR, 255, false));
+    List<KeyColumn> newCols = new ArrayList<>();
+    newCols.add(new KeyColumn("email"));
+    newTable.getIndexes().add(new Key(KeyType.INDEX, newCols, false, false, true, null));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(changeSet.getChanges().stream().anyMatch(c -> c instanceof DropKeyChange));
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(c -> c instanceof com.stano.schema.diff.change.AddKeyChange));
+  }
+
+  @Test
+  @DisplayName("detects check constraint body change")
+  void detectsCheckConstraintBodyChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "orders", null, null, false);
+    oldTable.getColumns().add(new Column("qty", ColumnType.INT, 0, false));
+    oldTable.getConstraints().add(new Constraint("chk_qty", "qty > 0", DatabaseType.POSTGRESQL));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "orders", null, null, false);
+    newTable.getColumns().add(new Column("qty", ColumnType.INT, 0, false));
+    newTable.getConstraints().add(new Constraint("chk_qty", "qty > 1", DatabaseType.POSTGRESQL));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c ->
+                    c instanceof DropConstraintChange drop
+                        && drop.getConstraintName().equals("chk_qty")));
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c ->
+                    c instanceof AddConstraintChange add
+                        && add.getConstraint().getSql().equals("qty > 1")));
+  }
+
+  @Test
+  @DisplayName("detects view select change")
+  void detectsViewSelectChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addView(new View("s", "v_orders", "select id from orders", null));
+
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addView(new View("s", "v_orders", "select id, qty from orders", null));
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c -> c instanceof DropViewChange drop && drop.getViewName().equals("v_orders")));
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c ->
+                    c instanceof com.stano.schema.diff.change.AddViewChange add
+                        && add.getView().getSql().equals("select id, qty from orders")));
+  }
+
+  @Test
+  @DisplayName("detects column enum type change")
+  void detectsColumnEnumTypeChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "users", null, null, false);
+    oldTable
+        .getColumns()
+        .add(
+            new Column(
+                "status",
+                ColumnType.ENUM,
+                0,
+                0,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "status_a",
+                null));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "users", null, null, false);
+    newTable
+        .getColumns()
+        .add(
+            new Column(
+                "status",
+                ColumnType.ENUM,
+                0,
+                0,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "status_b",
+                null));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(
+                c ->
+                    c instanceof ModifyColumnChange modify
+                        && modify.getTableName().equals("users")));
   }
 }

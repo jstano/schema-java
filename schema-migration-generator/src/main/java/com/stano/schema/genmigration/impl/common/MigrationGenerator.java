@@ -20,7 +20,16 @@ import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
+import com.stano.schema.gensql.impl.common.ColumnConstraintGenerator;
+import com.stano.schema.gensql.impl.common.OutputMode;
+import com.stano.schema.gensql.impl.common.SQLGenerator;
+import com.stano.schema.gensql.impl.common.SQLGeneratorFactory;
+import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;
+import com.stano.schema.model.Column;
+import com.stano.schema.model.ForeignKeyMode;
+import com.stano.schema.model.Schema;
 import java.io.PrintWriter;
+import java.io.Writer;
 
 /**
  * Abstract base class for dialect-specific migration SQL generators (implemented per-database under
@@ -255,4 +264,59 @@ public abstract class MigrationGenerator {
    * @param change the view removal to generate SQL for
    */
   protected abstract void generateDropView(DropViewChange change);
+
+  private ColumnConstraintGenerator columnConstraintGenerator;
+
+  /**
+   * Returns the {@code check(...)} clause the real {@code CREATE TABLE} generator would attach to
+   * this column (boolean {@code YesNo}/{@code YN} modes, an explicit {@code check} attribute, enum
+   * value lists, and min/max bounds), or {@code null} if the column has none - delegating to the
+   * dialect's own {@link ColumnConstraintGenerator} so an {@code AddColumn} migration enforces
+   * exactly the same constraint a fresh install would, with no separate reimplementation to drift
+   * out of sync.
+   *
+   * @param column the column to render a check constraint for
+   * @return the check clause, or {@code null} if the column has no check constraint (or if these
+   *     options carry no {@link Schema}, e.g. in tests that only exercise a single change)
+   */
+  protected final String getCheckConstraintSql(Column column) {
+    if (options.getSchema() == null) {
+      return null;
+    }
+    return getColumnConstraintGenerator().getCheckConstraintSQL(column);
+  }
+
+  /**
+   * Returns the {@code ck_<table>_<column>_<hash>} name the real {@code CREATE TABLE} generator
+   * would give this column's check constraint, so a migration-generated constraint matches what a
+   * fresh install would produce.
+   *
+   * @param tableName the table the column belongs to
+   * @param columnName the column the constraint is for
+   * @return the constraint name
+   */
+  protected final String getCheckConstraintName(String tableName, String columnName) {
+    return getColumnConstraintGenerator().getConstraintName(tableName, columnName);
+  }
+
+  /**
+   * Builds (and caches) this generator's dialect-specific {@link ColumnConstraintGenerator}, using
+   * an in-memory sink so it can be created without running a full {@code CREATE TABLE} generation.
+   */
+  private ColumnConstraintGenerator getColumnConstraintGenerator() {
+    if (columnConstraintGenerator == null) {
+      Schema schema = options.getSchema();
+      SQLGeneratorOptions sqlGeneratorOptions =
+          new SQLGeneratorOptions(
+              schema,
+              new PrintWriter(Writer.nullWriter()),
+              options.getDatabaseType(),
+              ForeignKeyMode.RELATIONS,
+              schema.getBooleanMode(),
+              OutputMode.ALL);
+      SQLGenerator sqlGenerator = new SQLGeneratorFactory().createSQLGenerator(sqlGeneratorOptions);
+      columnConstraintGenerator = sqlGenerator.getColumnConstraintGenerator();
+    }
+    return columnConstraintGenerator;
+  }
 }

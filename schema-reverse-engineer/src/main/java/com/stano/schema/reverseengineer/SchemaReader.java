@@ -21,19 +21,44 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import org.apache.commons.text.StringEscapeUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SchemaReader {
+  private static final Logger LOGGER = LoggerFactory.getLogger(SchemaReader.class);
+
+  /** The Postgres schema introspected when no schema name is given explicitly. */
+  public static final String DEFAULT_SCHEMA = "public";
+
+  /**
+   * Reads the given database's metadata into a {@link Schema}, introspecting only the {@code
+   * public} schema. Equivalent to {@link #readSchema(Connection, String)} with {@link
+   * #DEFAULT_SCHEMA}.
+   */
   public Schema readSchema(Connection connection) {
+    return readSchema(connection, DEFAULT_SCHEMA);
+  }
+
+  /**
+   * Reads the given database's metadata into a {@link Schema}, introspecting only the named schema
+   * (rather than every schema visible on the connection).
+   *
+   * @param connection the JDBC connection to introspect
+   * @param dbSchema the name of the database schema to introspect (e.g. {@code "public"})
+   * @return the resulting in-memory schema model, with every table's {@code schemaName} set to
+   *     {@code dbSchema}
+   */
+  public Schema readSchema(Connection connection, String dbSchema) {
     try {
       var schema = new Schema(null);
       var metaData = connection.getMetaData();
 
-      populateTables(schema, metaData);
-      populateColumns(schema, metaData);
-      populatePrimaryKeys(schema, metaData);
+      populateTables(schema, metaData, dbSchema);
+      populateColumns(schema, metaData, dbSchema);
+      populatePrimaryKeys(schema, metaData, dbSchema);
       populateConstraints(schema, connection);
-      populateKeys(schema, metaData);
-      populateImportedKeys(schema, metaData);
+      populateKeys(schema, metaData, dbSchema);
+      populateImportedKeys(schema, metaData, dbSchema);
 
       return schema;
     } catch (SQLException x) {
@@ -41,17 +66,19 @@ public class SchemaReader {
     }
   }
 
-  private void populateTables(Schema schema, DatabaseMetaData metaData) throws SQLException {
-    try (var resultSet = metaData.getTables(null, null, null, new String[] {"TABLE"})) {
+  private void populateTables(Schema schema, DatabaseMetaData metaData, String dbSchema)
+      throws SQLException {
+    try (var resultSet = metaData.getTables(null, dbSchema, null, new String[] {"TABLE"})) {
       while (resultSet.next()) {
         String tableName = resultSet.getString("TABLE_NAME");
-        schema.addTable(new Table(schema, "", tableName, null, null, false));
+        schema.addTable(new Table(schema, dbSchema, tableName, null, null, false));
       }
     }
   }
 
-  private void populateColumns(Schema schema, DatabaseMetaData metaData) throws SQLException {
-    try (var resultSet = metaData.getColumns(null, null, null, null)) {
+  private void populateColumns(Schema schema, DatabaseMetaData metaData, String dbSchema)
+      throws SQLException {
+    try (var resultSet = metaData.getColumns(null, dbSchema, null, null)) {
       while (resultSet.next()) {
         String tableName = resultSet.getString("TABLE_NAME");
         String columnName = resultSet.getString("COLUMN_NAME");
@@ -94,10 +121,11 @@ public class SchemaReader {
     }
   }
 
-  private void populatePrimaryKeys(Schema schema, DatabaseMetaData metaData) throws SQLException {
+  private void populatePrimaryKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
+      throws SQLException {
     var primaryKeyData = new HashMap<String, List<PrimaryKeyData>>();
 
-    try (var resultSet = metaData.getPrimaryKeys(null, null, null)) {
+    try (var resultSet = metaData.getPrimaryKeys(null, dbSchema, null)) {
       while (resultSet.next()) {
         String tableName = resultSet.getString("TABLE_NAME");
         String columnName = resultSet.getString("COLUMN_NAME");
@@ -158,9 +186,11 @@ public class SchemaReader {
     }
   }
 
-  private void populateKeys(Schema schema, DatabaseMetaData metaData) throws SQLException {
+  private void populateKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
+      throws SQLException {
     for (Table table : schema.getTables()) {
-      var primaryKeysResultSet = metaData.getIndexInfo(null, null, table.getName(), false, false);
+      var primaryKeysResultSet =
+          metaData.getIndexInfo(null, dbSchema, table.getName(), false, false);
       var keys = new LinkedHashMap<String, List<KeyDataColumn>>();
 
       while (primaryKeysResultSet.next()) {
@@ -235,11 +265,12 @@ public class SchemaReader {
     return true;
   }
 
-  void populateImportedKeys(Schema schema, DatabaseMetaData metaData) throws SQLException {
+  void populateImportedKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
+      throws SQLException {
     for (Table table : schema.getTables()) {
       var foreignKeys = new ArrayList<ForeignKeyData>();
 
-      try (var resultSet = metaData.getImportedKeys(null, null, table.getName())) {
+      try (var resultSet = metaData.getImportedKeys(null, dbSchema, table.getName())) {
         while (resultSet.next()) {
           String pkTableName = resultSet.getString("PKTABLE_NAME");
           String pkColumnName = resultSet.getString("PKCOLUMN_NAME");
@@ -372,7 +403,12 @@ public class SchemaReader {
       return ColumnType.VARCHAR;
     }
 
-    throw new IllegalArgumentException("Unknown data type: " + dataType);
+    // An unsupported/unmapped type falls back to TEXT with a warning rather than aborting the
+    // whole run - losing one column's exact type is far better than producing no output at all
+    // for the rest of the database.
+    LOGGER.warn(
+        "Unknown data type '{}' (typeName='{}') - falling back to text", dataType, typeName);
+    return ColumnType.TEXT;
   }
 
   private ColumnType getElementType(int dataType, String typeName, int columnSize) {

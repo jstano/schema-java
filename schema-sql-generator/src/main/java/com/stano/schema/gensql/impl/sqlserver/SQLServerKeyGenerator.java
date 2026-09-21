@@ -14,6 +14,10 @@ class SQLServerKeyGenerator extends KeyGenerator {
 
   protected String getKeyClusterSql(Key key) {
 
+    if (key.isCluster() && key.getType() == KeyType.PRIMARY) {
+      return "clustered";
+    }
+
     if (!key.isCluster() && key.getType() == KeyType.PRIMARY) {
       return "nonclustered";
     }
@@ -28,7 +32,7 @@ class SQLServerKeyGenerator extends KeyGenerator {
   protected String getKeyCompressSql(Key key) {
 
     if (key.isCompress()) {
-      sqlWriter.print("with (data_compression = page)");
+      return "with (data_compression = page)";
     }
 
     return null;

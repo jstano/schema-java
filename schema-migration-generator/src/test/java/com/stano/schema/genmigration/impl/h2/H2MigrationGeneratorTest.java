@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.ChangeSet;
+import com.stano.schema.diff.change.AddColumnChange;
 import com.stano.schema.diff.change.AddFunctionChange;
 import com.stano.schema.diff.change.AddProcedureChange;
 import com.stano.schema.diff.change.AddTableChange;
@@ -19,6 +20,7 @@ import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.Function;
 import com.stano.schema.model.Procedure;
+import com.stano.schema.model.Schema;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import org.junit.jupiter.api.DisplayName;
@@ -179,5 +181,28 @@ class H2MigrationGeneratorTest {
     gen.generate();
 
     assertTrue(sw.toString().contains("DROP PROCEDURE IF EXISTS sp_audit"));
+  }
+
+  @Test
+  @DisplayName("add-column emits a CHECK constraint matching min/max bounds")
+  void generatesAddColumnMinMaxCheckConstraint() {
+    ChangeSet changeSet = new ChangeSet();
+    Column col =
+        new Column("price", ColumnType.INT, 0, 0, false, null, null, null, "0", "100", null, null);
+    changeSet.addChange(new AddColumnChange("product", col));
+
+    Schema schema = new Schema(null);
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2, schema);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(
+        sql.contains("ADD CONSTRAINT ck_product_price_")
+            && sql.contains("check(price >= 0 and price <= 100)"),
+        "expected a min/max CHECK constraint, got: " + sql);
   }
 }

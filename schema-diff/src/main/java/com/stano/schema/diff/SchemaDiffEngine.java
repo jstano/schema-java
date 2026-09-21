@@ -21,6 +21,7 @@ import com.stano.schema.model.Column;
 import com.stano.schema.model.Constraint;
 import com.stano.schema.model.Function;
 import com.stano.schema.model.Key;
+import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
@@ -113,10 +114,22 @@ public class SchemaDiffEngine {
   }
 
   private void dropRelations(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
-    List<Relation> newRelations = getAllRelations(newSchema);
-    for (Relation oldRelation : getAllRelations(oldSchema)) {
-      if (!containsRelation(newRelations, oldRelation)) {
-        changeSet.addChange(new DropRelationChange(oldRelation));
+    Map<String, Table> newTablesByName = indexTablesByName(newSchema);
+    for (Table oldTable : oldSchema.getTables()) {
+      Table newTable = newTablesByName.get(oldTable.getName());
+      if (newTable == null) {
+        continue;
+      }
+
+      // Ordinal is the relation's 1-based position in the table's relation list, matching the
+      // create path's `fk_<table><n>` numbering, so the migration generator can reproduce the
+      // exact name of the constraint it's dropping.
+      List<Relation> oldRelations = oldTable.getRelations();
+      for (int i = 0; i < oldRelations.size(); i++) {
+        Relation oldRelation = oldRelations.get(i);
+        if (!containsRelation(newTable.getRelations(), oldRelation)) {
+          changeSet.addChange(new DropRelationChange(oldRelation, i + 1));
+        }
       }
     }
   }
@@ -128,9 +141,30 @@ public class SchemaDiffEngine {
       if (newTable == null) {
         continue;
       }
+
+      // Ordinal counts only siblings of the same category (unique keys among unique keys,
+      // indexes among indexes) in list order - matching how the create path numbers
+      // `ak_<table><n>`/`ix_<table><n>` - so the migration generator can reproduce the exact
+      // same name for the object it's dropping.
+      int uniqueOrdinal = 0;
       for (Key oldKey : oldTable.getKeys()) {
-        if (!containsKey(newTable.getKeys(), oldKey)) {
-          changeSet.addChange(new DropKeyChange(oldTable.getName(), oldKey));
+        if (oldKey.getType() == KeyType.UNIQUE) {
+          uniqueOrdinal++;
+        }
+        if (!keyExistsIn(oldKey, newTable.getKeys())
+            && !keyExistsIn(oldKey, newTable.getIndexes())) {
+          changeSet.addChange(new DropKeyChange(oldTable.getName(), oldKey, uniqueOrdinal));
+        }
+      }
+
+      int indexOrdinal = 0;
+      for (Key oldKey : oldTable.getIndexes()) {
+        if (oldKey.getType() == KeyType.INDEX) {
+          indexOrdinal++;
+        }
+        if (!keyExistsIn(oldKey, newTable.getKeys())
+            && !keyExistsIn(oldKey, newTable.getIndexes())) {
+          changeSet.addChange(new DropKeyChange(oldTable.getName(), oldKey, indexOrdinal));
         }
       }
     }
@@ -238,14 +272,44 @@ public class SchemaDiffEngine {
       Table oldTable = oldTablesByName.get(newTable.getName());
       if (oldTable == null) {
         // New table, all keys will be added
+        int uniqueOrdinal = 0;
         for (Key newKey : newTable.getKeys()) {
-          changeSet.addChange(new AddKeyChange(newTable.getName(), newKey));
+          if (newKey.getType() == KeyType.UNIQUE) {
+            uniqueOrdinal++;
+          }
+          changeSet.addChange(new AddKeyChange(newTable.getName(), newKey, uniqueOrdinal));
+        }
+        int indexOrdinal = 0;
+        for (Key newKey : newTable.getIndexes()) {
+          if (newKey.getType() == KeyType.INDEX) {
+            indexOrdinal++;
+          }
+          changeSet.addChange(new AddKeyChange(newTable.getName(), newKey, indexOrdinal));
         }
         continue;
       }
+
+      // See dropKeys - same per-category ordinal so an added key gets the name the create path
+      // would give it.
+      int uniqueOrdinal = 0;
       for (Key newKey : newTable.getKeys()) {
-        if (!containsKey(oldTable.getKeys(), newKey)) {
-          changeSet.addChange(new AddKeyChange(newTable.getName(), newKey));
+        if (newKey.getType() == KeyType.UNIQUE) {
+          uniqueOrdinal++;
+        }
+        if (!keyExistsIn(newKey, oldTable.getKeys())
+            && !keyExistsIn(newKey, oldTable.getIndexes())) {
+          changeSet.addChange(new AddKeyChange(newTable.getName(), newKey, uniqueOrdinal));
+        }
+      }
+
+      int indexOrdinal = 0;
+      for (Key newKey : newTable.getIndexes()) {
+        if (newKey.getType() == KeyType.INDEX) {
+          indexOrdinal++;
+        }
+        if (!keyExistsIn(newKey, oldTable.getKeys())
+            && !keyExistsIn(newKey, oldTable.getIndexes())) {
+          changeSet.addChange(new AddKeyChange(newTable.getName(), newKey, indexOrdinal));
         }
       }
     }
@@ -271,10 +335,21 @@ public class SchemaDiffEngine {
   }
 
   private void addRelations(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
-    List<Relation> oldRelations = getAllRelations(oldSchema);
-    for (Relation newRelation : getAllRelations(newSchema)) {
-      if (!containsRelation(oldRelations, newRelation)) {
-        changeSet.addChange(new AddRelationChange(newRelation));
+    Map<String, Table> oldTablesByName = indexTablesByName(oldSchema);
+    for (Table newTable : newSchema.getTables()) {
+      Table oldTable = oldTablesByName.get(newTable.getName());
+      if (oldTable == null) {
+        continue;
+      }
+
+      // See dropRelations - same ordinal so an added relation gets the name the create path
+      // would give it.
+      List<Relation> newRelations = newTable.getRelations();
+      for (int i = 0; i < newRelations.size(); i++) {
+        Relation newRelation = newRelations.get(i);
+        if (!containsRelation(oldTable.getRelations(), newRelation)) {
+          changeSet.addChange(new AddRelationChange(newRelation, i + 1));
+        }
       }
     }
   }
@@ -360,14 +435,31 @@ public class SchemaDiffEngine {
     return map;
   }
 
-  private boolean containsKey(List<Key> keys, Key target) {
-    for (Key key : keys) {
-      if (key.getType() == target.getType()
-          && key.getColumnsAsString().equals(target.getColumnsAsString())) {
+  private boolean keyExistsIn(Key key, List<Key> keys) {
+    for (Key candidate : keys) {
+      if (keysEqual(candidate, key)) {
         return true;
       }
     }
     return false;
+  }
+
+  private boolean keysEqual(Key a, Key b) {
+    if (a.getType() != b.getType()
+        || a.isUnique() != b.isUnique()
+        || a.isCluster() != b.isCluster()
+        || !java.util.Objects.equals(a.getInclude(), b.getInclude())
+        || a.getColumns().size() != b.getColumns().size()) {
+      return false;
+    }
+
+    for (int i = 0; i < a.getColumns().size(); i++) {
+      if (!a.getColumns().get(i).getName().equalsIgnoreCase(b.getColumns().get(i).getName())) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private boolean containsConstraint(List<Constraint> constraints, Constraint target) {
@@ -385,19 +477,12 @@ public class SchemaDiffEngine {
       if (relation.getFromTableName().equals(target.getFromTableName())
           && relation.getFromColumnName().equals(target.getFromColumnName())
           && relation.getToTableName().equals(target.getToTableName())
-          && relation.getToColumnName().equals(target.getToColumnName())) {
+          && relation.getToColumnName().equals(target.getToColumnName())
+          && relation.getType() == target.getType()) {
         return true;
       }
     }
     return false;
-  }
-
-  private List<Relation> getAllRelations(Schema schema) {
-    List<Relation> allRelations = new ArrayList<>();
-    for (Table table : schema.getTables()) {
-      allRelations.addAll(table.getRelations());
-    }
-    return allRelations;
   }
 
   private boolean columnsEqual(Column col1, Column col2) {
@@ -405,7 +490,13 @@ public class SchemaDiffEngine {
         && col1.getLength() == col2.getLength()
         && col1.getScale() == col2.getScale()
         && col1.isRequired() == col2.isRequired()
-        && java.util.Objects.equals(col1.getDefaultConstraint(), col2.getDefaultConstraint());
+        && java.util.Objects.equals(col1.getDefaultConstraint(), col2.getDefaultConstraint())
+        && java.util.Objects.equals(col1.getCheckConstraint(), col2.getCheckConstraint())
+        && java.util.Objects.equals(col1.getEnumType(), col2.getEnumType())
+        && col1.getElementType() == col2.getElementType()
+        && java.util.Objects.equals(col1.getGenerated(), col2.getGenerated())
+        && java.util.Objects.equals(col1.getMinValue(), col2.getMinValue())
+        && java.util.Objects.equals(col1.getMaxValue(), col2.getMaxValue());
   }
 
   private Map<String, Function> indexFunctionsByKey(Schema schema) {

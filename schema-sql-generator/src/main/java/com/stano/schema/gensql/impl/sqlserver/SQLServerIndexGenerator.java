@@ -4,6 +4,8 @@ import com.stano.schema.gensql.impl.common.IndexGenerator;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.Table;
+import java.util.ArrayList;
+import java.util.List;
 
 class SQLServerIndexGenerator extends IndexGenerator {
   SQLServerIndexGenerator(SQLGenerator sqlGenerator) {
@@ -19,14 +21,16 @@ class SQLServerIndexGenerator extends IndexGenerator {
 
   @Override
   protected String getIndexOptions(Key key) {
+    List<String> options = new ArrayList<>();
+
     if (key.getInclude() != null && !key.getInclude().isEmpty()) {
-      return String.format("include (%s)", key.getInclude());
+      options.add(String.format("include (%s)", key.getInclude()));
     }
 
     if (key.isCompress()) {
-      return "with (data_compression = page)";
+      options.add("with (data_compression = page)");
     }
 
-    return null;
+    return options.isEmpty() ? null : String.join(" ", options);
   }
 }

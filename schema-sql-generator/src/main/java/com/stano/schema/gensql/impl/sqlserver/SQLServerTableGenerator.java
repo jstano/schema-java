@@ -7,6 +7,7 @@ import com.stano.schema.gensql.impl.common.KeyGenerator;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.gensql.impl.common.TableConstraintGenerator;
 import com.stano.schema.gensql.impl.common.TableGenerator;
+import com.stano.schema.model.LockEscalation;
 import com.stano.schema.model.Table;
 import com.stano.schema.model.TableOption;
 
@@ -28,16 +29,18 @@ class SQLServerTableGenerator extends TableGenerator {
   }
 
   @Override
-  protected void outputTableHeader(Table table) {
+  protected void outputTableDrop(Table table) {
     String tableName = getFullyQualifiedTableName(table);
 
     sqlWriter.println("/* " + table.getName() + " */");
-    sqlWriter.println(
-        "if exists (select name from dbo.sysobjects where name = '"
-            + table.getName()
-            + "' and type = 'U')");
+    sqlWriter.println("if object_id('" + escapeSqlLiteral(tableName) + "', 'U') is not null");
     sqlWriter.println("drop table " + tableName + statementSeparator);
-    sqlWriter.println();
+  }
+
+  @Override
+  protected void outputTableHeader(Table table) {
+    String tableName = getFullyQualifiedTableName(table);
+
     sqlWriter.println("create table " + tableName);
     sqlWriter.println("(");
   }
@@ -50,11 +53,13 @@ class SQLServerTableGenerator extends TableGenerator {
       sqlWriter.println(")" + statementSeparator);
     }
 
-    if (table.getLockEscalation() != null) {
+    // `AUTO` is SQL Server's own default for LOCK_ESCALATION, so emitting the ALTER for it
+    // would be a no-op; only emit it when it actually changes behavior.
+    if (table.getLockEscalation() != null && table.getLockEscalation() != LockEscalation.AUTO) {
       sqlWriter.println();
       sqlWriter.println(
           "alter table "
-              + table.getName()
+              + getFullyQualifiedTableName(table)
               + " set (lock_escalation = "
               + table.getLockEscalation().name().toLowerCase()
               + ")"

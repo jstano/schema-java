@@ -29,13 +29,14 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
     }
 
     String triggerName = table.getName().toLowerCase() + "_delete";
+    String schemaName =
+        table.getSchemaName().equalsIgnoreCase("public") ? "dbo" : table.getSchemaName();
+    String fullyQualifiedTrigger = schemaName + "." + triggerName;
 
     sqlWriter.println(String.format("/* %s */", triggerName));
     sqlWriter.println(
-        "if exists (select name from dbo.sysobjects where name = '"
-            + triggerName
-            + "' and type = 'TR')");
-    sqlWriter.println("   drop trigger " + triggerName + statementSeparator);
+        "if object_id('" + escapeSqlLiteral(fullyQualifiedTrigger) + "', 'TR') is not null");
+    sqlWriter.println("   drop trigger " + fullyQualifiedTrigger + statementSeparator);
     sqlWriter.println();
 
     sqlWriter.println(

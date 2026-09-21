@@ -11,16 +11,21 @@ import com.stano.schema.model.Key;
 public final class AddKeyChange implements SchemaChange {
   private final String tableName;
   private final Key key;
+  private final int ordinal;
 
   /**
    * Creates a change describing a key to add.
    *
    * @param tableName the name of the table the key is added to
    * @param key the definition of the new key
+   * @param ordinal the 1-based position of this key among the table's same-category siblings
+   *     (unique keys counted among unique keys, indexes among indexes) — matches the name the SQL
+   *     generator's create path would give this key (e.g. {@code ak_<table><ordinal>})
    */
-  public AddKeyChange(String tableName, Key key) {
+  public AddKeyChange(String tableName, Key key, int ordinal) {
     this.tableName = tableName;
     this.key = key;
+    this.ordinal = ordinal;
   }
 
   /** Returns the name of the table the key is added to. */
@@ -31,5 +36,13 @@ public final class AddKeyChange implements SchemaChange {
   /** Returns the definition of the new key. */
   public Key getKey() {
     return key;
+  }
+
+  /**
+   * Returns the 1-based position of this key among the table's same-category siblings (unique keys
+   * counted among unique keys, indexes among indexes).
+   */
+  public int getOrdinal() {
+    return ordinal;
   }
 }

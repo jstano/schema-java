@@ -27,12 +27,17 @@ class PostgreSQLTableGenerator extends TableGenerator {
   }
 
   @Override
-  protected void outputTableHeader(Table table) {
+  protected void outputTableDrop(Table table) {
     String tableName = getFullyQualifiedTableName(table);
 
     sqlWriter.println(String.format("/* %s */", tableName));
     sqlWriter.println("drop table if exists " + tableName + " cascade" + statementSeparator);
-    sqlWriter.println();
+  }
+
+  @Override
+  protected void outputTableHeader(Table table) {
+    String tableName = getFullyQualifiedTableName(table);
+
     sqlWriter.println("create table " + tableName);
     sqlWriter.println("(");
   }

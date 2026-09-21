@@ -26,6 +26,7 @@ import com.stano.schema.gensql.impl.sqlserver.SQLServerColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.Naming;
 import java.io.PrintWriter;
 import java.util.Objects;
 
@@ -106,6 +107,19 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
       w.print(options.getStatementSeparator());
       w.println();
     }
+
+    String checkSql = getCheckConstraintSql(col);
+    if (checkSql != null) {
+      w.println(
+          "ALTER TABLE "
+              + change.getTableName()
+              + " ADD CONSTRAINT "
+              + getCheckConstraintName(change.getTableName(), col.getName())
+              + " "
+              + checkSql);
+      w.print(options.getStatementSeparator());
+      w.println();
+    }
   }
 
   @Override
@@ -170,19 +184,21 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
                 + ")");
         break;
       case UNIQUE:
-      case INDEX:
-        String indexName =
-            "idx_"
-                + change.getTableName()
-                + "_"
-                + change.getKey().getColumnsAsString().replace(",", "_");
-        String unique =
-            change.getKey().getType() == com.stano.schema.model.KeyType.UNIQUE ? "UNIQUE " : "";
         w.println(
-            "CREATE "
-                + unique
-                + "INDEX "
-                + indexName
+            "CREATE UNIQUE INDEX "
+                + Naming.uniqueKeyName(
+                    DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal())
+                + " ON "
+                + change.getTableName()
+                + " ("
+                + change.getKey().getColumnsAsString()
+                + ")");
+        break;
+      case INDEX:
+        w.println(
+            "CREATE INDEX "
+                + Naming.indexName(
+                    DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal())
                 + " ON "
                 + change.getTableName()
                 + " ("
@@ -203,17 +219,34 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
             "ALTER TABLE "
                 + change.getTableName()
                 + " DROP CONSTRAINT "
-                + change.getTableName()
-                + "_pkey");
+                + Naming.primaryKeyName(DatabaseType.SQL_SERVER, change.getTableName()));
         break;
       case UNIQUE:
+        {
+          String constraintName =
+              Naming.uniqueKeyName(
+                  DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal());
+          w.println(
+              "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = '"
+                  + constraintName
+                  + "') DROP INDEX "
+                  + constraintName
+                  + " ON "
+                  + change.getTableName());
+        }
+        break;
       case INDEX:
-        String indexName =
-            "idx_"
-                + change.getTableName()
-                + "_"
-                + change.getKey().getColumnsAsString().replace(",", "_");
-        w.println("DROP INDEX IF EXISTS " + indexName + " ON " + change.getTableName());
+        {
+          String indexName =
+              Naming.indexName(DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal());
+          w.println(
+              "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = '"
+                  + indexName
+                  + "') DROP INDEX "
+                  + indexName
+                  + " ON "
+                  + change.getTableName());
+        }
         break;
     }
     w.print(options.getStatementSeparator());
@@ -248,10 +281,8 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   protected void generateAddRelation(AddRelationChange change) {
     PrintWriter w = options.getWriter();
     String fkName =
-        "fk_"
-            + change.getRelation().getFromTableName()
-            + "_"
-            + change.getRelation().getFromColumnName();
+        Naming.foreignKeyName(
+            DatabaseType.SQL_SERVER, change.getRelation().getFromTableName(), change.getOrdinal());
     String onDelete =
         change.getRelation().getType() == com.stano.schema.model.RelationType.CASCADE
             ? " ON DELETE CASCADE"
@@ -277,10 +308,8 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   protected void generateDropRelation(DropRelationChange change) {
     PrintWriter w = options.getWriter();
     String fkName =
-        "fk_"
-            + change.getRelation().getFromTableName()
-            + "_"
-            + change.getRelation().getFromColumnName();
+        Naming.foreignKeyName(
+            DatabaseType.SQL_SERVER, change.getRelation().getFromTableName(), change.getOrdinal());
     w.println(
         "ALTER TABLE " + change.getRelation().getFromTableName() + " DROP CONSTRAINT " + fkName);
     w.print(options.getStatementSeparator());

@@ -9,7 +9,9 @@ import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import java.io.PrintWriter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.commons.text.StringEscapeUtils;
 
 /**
@@ -48,12 +50,42 @@ public class SchemaWriter {
           version="1.0">\
 """);
 
-    for (int i = 0; i < schema.getTables().size(); i++) {
-      var table = schema.getTables().get(i);
-      outputTable(table);
+    // Tables in the default schema ("public", or with no schema name recorded) are written flat
+    // under <database>, as before; tables in any other named schema are grouped and wrapped in a
+    // <schema name="..."> element, so the schema name round-trips through the parser instead of
+    // being silently discarded.
+    Map<String, List<Table>> tablesBySchema = new LinkedHashMap<>();
+    for (Table table : schema.getTables()) {
+      String schemaName = table.getSchemaName();
+      String key =
+          (schemaName == null || schemaName.isBlank() || schemaName.equalsIgnoreCase("public"))
+              ? ""
+              : schemaName;
+      tablesBySchema.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(table);
+    }
 
-      if (i < schema.getTables().size() - 1) {
-        out.println();
+    boolean first = true;
+    for (Map.Entry<String, List<Table>> entry : tablesBySchema.entrySet()) {
+      String schemaName = entry.getKey();
+      List<Table> tables = entry.getValue();
+
+      if (!schemaName.isEmpty()) {
+        if (!first) {
+          out.println();
+        }
+        out.printf("  <schema name=\"%s\">\n", schemaName);
+      }
+
+      for (int i = 0; i < tables.size(); i++) {
+        if (!first) {
+          out.println();
+        }
+        first = false;
+        outputTable(tables.get(i));
+      }
+
+      if (!schemaName.isEmpty()) {
+        out.println("  </schema>");
       }
     }
 
@@ -70,6 +102,14 @@ public class SchemaWriter {
     }
 
     if (!table.getKeys().isEmpty()) {
+      boolean hasUniqueOrIndexKeys =
+          table.getKeys().stream()
+              .anyMatch(key -> key.getType() == KeyType.UNIQUE || key.getType() == KeyType.INDEX);
+
+      if (table.getPrimaryKey() == null && hasUniqueOrIndexKeys) {
+        throw new PkLessTableHasKeysException(table.getName());
+      }
+
       out.printf("    <keys>\n");
 
       if (table.getPrimaryKey() != null) {

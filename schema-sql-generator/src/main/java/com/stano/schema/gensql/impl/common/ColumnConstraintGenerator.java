@@ -24,7 +24,7 @@ public class ColumnConstraintGenerator extends BaseGenerator {
         .collect(Collectors.toList());
   }
 
-  protected String getCheckConstraintSQL(Column column) {
+  public String getCheckConstraintSQL(Column column) {
     if (column.getType() == ColumnType.BOOLEAN) {
       if (booleanMode == BooleanMode.YES_NO) {
         return String.format("check(%s in ('Yes','No'))", column.getName());
@@ -38,10 +38,25 @@ public class ColumnConstraintGenerator extends BaseGenerator {
     }
 
     if (column.getCheckConstraint() != null) {
-      return column.getCheckConstraint();
+      return wrapInCheck(column.getCheckConstraint());
     }
 
     return buildCheckConstraint(column);
+  }
+
+  /**
+   * Wraps a user-supplied check-constraint expression in {@code check(...)}, unless it is already
+   * wrapped (case-insensitive, after trimming) — idempotent so a value that already went through
+   * this wrapping (e.g. at parse time) isn't double-wrapped.
+   */
+  private String wrapInCheck(String expression) {
+    String trimmed = expression.trim();
+
+    if (trimmed.toLowerCase().startsWith("check")) {
+      return trimmed;
+    }
+
+    return String.format("check(%s)", trimmed);
   }
 
   private String generateConstraint(Table table, Column column) {
@@ -53,7 +68,12 @@ public class ColumnConstraintGenerator extends BaseGenerator {
         "   constraint %s %s", getConstraintName(table.getName(), column.getName()), checkSql);
   }
 
-  private String getConstraintName(String tableName, String columnName) {
+  /**
+   * Builds the {@code ck_<table>_<column>_<hash>} name this generator gives a column's check
+   * constraint, so a caller outside a full {@code CREATE TABLE} generation (e.g.
+   * schema-migration-generator's {@code AddColumn} handling) can produce the exact same name.
+   */
+  public String getConstraintName(String tableName, String columnName) {
     tableName = tableName.toLowerCase();
     columnName = columnName.toLowerCase();
 

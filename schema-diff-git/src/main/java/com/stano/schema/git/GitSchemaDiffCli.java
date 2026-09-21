@@ -4,9 +4,12 @@ import com.stano.schema.diff.ChangeSet;
 import com.stano.schema.diff.SchemaDiffEngine;
 import com.stano.schema.genmigration.GenMigration;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.Schema;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
@@ -25,14 +28,27 @@ import org.apache.commons.cli.ParseException;
  *
  * <p>Usage: {@code java -cp ... com.stano.schema.git.GitSchemaDiffCli <schema-file> [options]}
  *
+ * <p>Alternatively, {@code --old}/{@code --new} may be given instead of the positional schema-file
+ * argument, to diff two arbitrary schema sources: a plain file path, or a git {@code <rev>:<path>}
+ * reference (e.g. {@code HEAD:schema.xml}, {@code v1.2.0:schema/schema.xml}).
+ *
  * <p>Supported options:
  *
  * <ul>
  *   <li>{@code -o, --output <file>} — write migration SQL to the given file; defaults to standard
- *       output when omitted.
+ *       output when omitted. Not usable together with {@code --auto-generate-name}.
  *   <li>{@code -d, --database-type <type>} — target database dialect, one of {@code postgresql},
  *       {@code h2}, or {@code sql_server} (case-insensitive); defaults to {@code postgresql} when
  *       omitted.
+ *   <li>{@code --old <source>} — the old (current) schema source: a file path, or a git {@code
+ *       <rev>:<path>} reference. Requires {@code --new}; conflicts with the positional schema-file
+ *       argument.
+ *   <li>{@code --new <source>} — the new (target) schema source, in the same form as {@code --old}.
+ *   <li>{@code --auto-generate-name} — auto-names the output as {@code V{timestamp}
+ *       [__{description}].sql} alongside the schema file, instead of using {@code --output}.
+ *       Requires the positional schema-file argument (not usable with {@code --old}/{@code --new}).
+ *   <li>{@code --description <text>} — optional description used by {@code --auto-generate-name}
+ *       (e.g. {@code "add users table"}).
  *   <li>{@code -h, --help} — print usage information and exit.
  * </ul>
  *
@@ -57,31 +73,103 @@ public class GitSchemaDiffCli {
                   .argName("type")
                   .desc("database type: postgresql, h2, sql_server (default: postgresql)")
                   .build())
+          .addOption(
+              Option.builder()
+                  .longOpt("old")
+                  .hasArg()
+                  .argName("source")
+                  .desc(
+                      "old (current) schema source: a file path, or <rev>:<path> (requires --new)")
+                  .build())
+          .addOption(
+              Option.builder()
+                  .longOpt("new")
+                  .hasArg()
+                  .argName("source")
+                  .desc("new (target) schema source: a file path, or <rev>:<path> (requires --old)")
+                  .build())
+          .addOption(
+              Option.builder()
+                  .longOpt("auto-generate-name")
+                  .desc(
+                      "auto-name the output as V{timestamp}[__{description}].sql alongside the"
+                          + " schema file (requires the positional schema-file argument)")
+                  .build())
+          .addOption(
+              Option.builder()
+                  .longOpt("description")
+                  .hasArg()
+                  .argName("text")
+                  .desc("description used by --auto-generate-name, e.g. 'add users table'")
+                  .build())
           .addOption(Option.builder("h").longOpt("help").desc("print this help").build());
 
   /**
-   * Parses command-line arguments, reads the committed and current versions of the given schema
-   * file, diffs them, and writes the resulting migration SQL to the requested destination.
+   * Parses command-line arguments, reads the two schema versions to compare (either the committed
+   * and current versions of the given schema file, or the sources given via {@code --old}/{@code
+   * --new}), diffs them, and writes the resulting migration SQL to the requested destination.
    *
    * <p>Prints an error message to standard error and terminates the JVM (via {@link
-   * System#exit(int)}) with a non-zero status on any parsing failure, invalid/missing arguments,
-   * unknown database type, or other exception raised while processing the schema.
+   * System#exit(int)}) with a non-zero status on any parsing failure, invalid/missing/conflicting
+   * arguments, unknown database type, or other exception raised while processing the schema.
    *
-   * @param args the command-line arguments: the schema file path plus any of the supported {@code
-   *     -o}, {@code -d}, or {@code -h} options
+   * @param args the command-line arguments: either the schema file path, or {@code --old}/{@code
+   *     --new}, plus any of the supported {@code -o}, {@code -d}, {@code --auto-generate-name},
+   *     {@code --description}, or {@code -h} options
    */
   public static void main(String[] args) {
     var parser = new DefaultParser();
     try {
       var cmd = parser.parse(OPTIONS, args);
 
-      if (cmd.hasOption("h") || cmd.getArgs().length == 0) {
+      if (cmd.hasOption("h")) {
         printHelp();
-        System.exit(cmd.hasOption("h") ? 0 : 1);
+        System.exit(0);
+      }
+
+      boolean hasOld = cmd.hasOption("old");
+      boolean hasNew = cmd.hasOption("new");
+      boolean hasPositionalFile = cmd.getArgs().length > 0;
+
+      if (hasOld != hasNew) {
+        System.err.println("Error: --old and --new must be given together");
+        printHelp();
+        System.exit(1);
+      }
+
+      if ((hasOld || hasNew) && hasPositionalFile) {
+        System.err.println("Error: --old/--new cannot be combined with a schema-file argument");
+        printHelp();
+        System.exit(1);
+      }
+
+      if (!hasOld && !hasPositionalFile) {
+        printHelp();
+        System.exit(1);
       }
 
       if (cmd.getArgs().length > 1) {
         System.err.println("Error: too many arguments");
+        printHelp();
+        System.exit(1);
+      }
+
+      boolean autoGenerateName = cmd.hasOption("auto-generate-name");
+
+      if (autoGenerateName && !hasPositionalFile) {
+        System.err.println("Error: --auto-generate-name requires a schema-file argument");
+        printHelp();
+        System.exit(1);
+      }
+
+      if (autoGenerateName && cmd.hasOption("o")) {
+        System.err.println("Error: --auto-generate-name cannot be combined with --output");
+        printHelp();
+        System.exit(1);
+      }
+
+      if (cmd.hasOption("description") && !autoGenerateName) {
+        System.err.println("Error: --description requires --auto-generate-name");
         printHelp();
         System.exit(1);
       }
@@ -97,12 +185,31 @@ public class GitSchemaDiffCli {
         }
       }
 
-      var schemaFile = Path.of(cmd.getArgs()[0]);
-      var versions = new GitSchemaReader().readSchemas(schemaFile);
-      var changeSet =
-          new SchemaDiffEngine().diff(versions.getCommittedSchema(), versions.getCurrentSchema());
+      Schema oldSchema;
+      Schema newSchema;
+      String schemaFileArg = hasPositionalFile ? cmd.getArgs()[0] : null;
 
-      if (cmd.hasOption("o")) {
+      if (hasOld) {
+        var sourceReader = new GitSchemaSourceReader();
+        oldSchema = sourceReader.readSchema(cmd.getOptionValue("old"));
+        newSchema = sourceReader.readSchema(cmd.getOptionValue("new"));
+      } else {
+        var versions = new GitSchemaReader().readSchemas(Path.of(schemaFileArg));
+        oldSchema = versions.getCommittedSchema();
+        newSchema = versions.getCurrentSchema();
+      }
+
+      var changeSet = new SchemaDiffEngine().diff(oldSchema, newSchema);
+
+      if (autoGenerateName) {
+        var outputPath =
+            MigrationFileNaming.generatePath(
+                schemaFileArg,
+                ZonedDateTime.now(ZoneOffset.UTC),
+                cmd.getOptionValue("description"));
+        writeToFile(changeSet, databaseType, outputPath);
+        System.out.println("Wrote migration to " + outputPath);
+      } else if (cmd.hasOption("o")) {
         writeToFile(changeSet, databaseType, Path.of(cmd.getOptionValue("o")));
       } else {
         writeToStdout(changeSet, databaseType);

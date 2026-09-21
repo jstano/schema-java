@@ -60,9 +60,7 @@ class SQLServerGeneratorTest {
   @DisplayName("generates DROP TABLE IF EXISTS guard before each CREATE TABLE")
   void generatesDropTableIfExistsGuardBeforeEachCreateTable() {
     String sql = generate(ForeignKeyMode.RELATIONS, BooleanMode.NATIVE);
-    assertTrue(
-        sql.contains("if exists (select name from dbo.sysobjects"),
-        "should include IF EXISTS guard");
+    assertTrue(sql.contains("if object_id("), "should include IF EXISTS guard");
     assertTrue(sql.contains("drop table"), "should include DROP TABLE");
   }
 
@@ -176,5 +174,23 @@ class SQLServerGeneratorTest {
     assertTrue(
         sql.contains("create table dbo.ParentTable"),
         "should always create ParentTable regardless of FK mode");
+  }
+
+  @Test
+  @DisplayName("generates LOCK_ESCALATION ALTER for a table with a non-default setting")
+  void generatesLockEscalationAlterForNonDefaultSetting() {
+    String sql = generate(ForeignKeyMode.RELATIONS, BooleanMode.NATIVE);
+    assertTrue(
+        sql.contains("alter table dbo.ColumnTesterTable set (lock_escalation = disable)"),
+        "should emit the ALTER for a table with an explicit non-AUTO lockEscalation");
+  }
+
+  @Test
+  @DisplayName("omits LOCK_ESCALATION ALTER for a table with no lockEscalation attribute")
+  void omitsLockEscalationAlterWhenUnset() {
+    String sql = generate(ForeignKeyMode.RELATIONS, BooleanMode.NATIVE);
+    assertFalse(
+        sql.contains("alter table dbo.ParentTable set (lock_escalation"),
+        "AUTO is SQL Server's own default, so no ALTER should be emitted for it");
   }
 }

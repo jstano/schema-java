@@ -157,4 +157,20 @@ public abstract class SQLGenerator {
 
   /** Outputs any other, dialect-specific SQL that should appear after all other generated DDL. */
   protected abstract void outputOtherSqlBottom();
+
+  /**
+   * Returns this dialect's {@link ColumnConstraintGenerator}, for callers that need to render a
+   * single column's CHECK constraint (e.g. schema-migration-generator's {@code AddColumn} handling)
+   * without running a full {@link #generate()} pass, so a migration-generated constraint matches
+   * exactly what a fresh install would produce.
+   *
+   * <p>The default implementation throws {@link UnsupportedOperationException}; the concrete
+   * PostgreSQL, H2, and SQL Server generators override it. Test doubles that subclass {@code
+   * SQLGenerator} directly for unrelated generator tests are unaffected as long as they don't call
+   * this method.
+   */
+  public ColumnConstraintGenerator getColumnConstraintGenerator() {
+    throw new UnsupportedOperationException(
+        getClass().getName() + " does not provide a ColumnConstraintGenerator");
+  }
 }

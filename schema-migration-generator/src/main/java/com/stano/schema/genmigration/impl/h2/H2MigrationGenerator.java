@@ -26,6 +26,7 @@ import com.stano.schema.gensql.impl.h2.H2ColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.Naming;
 import java.io.PrintWriter;
 
 public class H2MigrationGenerator extends MigrationGenerator {
@@ -102,6 +103,19 @@ public class H2MigrationGenerator extends MigrationGenerator {
       w.print(options.getStatementSeparator());
       w.println();
     }
+
+    String checkSql = getCheckConstraintSql(col);
+    if (checkSql != null) {
+      w.println(
+          "ALTER TABLE "
+              + change.getTableName()
+              + " ADD CONSTRAINT "
+              + getCheckConstraintName(change.getTableName(), col.getName())
+              + " "
+              + checkSql);
+      w.print(options.getStatementSeparator());
+      w.println();
+    }
   }
 
   @Override
@@ -154,19 +168,19 @@ public class H2MigrationGenerator extends MigrationGenerator {
                 + ")");
         break;
       case UNIQUE:
-      case INDEX:
-        String indexName =
-            "idx_"
-                + change.getTableName()
-                + "_"
-                + change.getKey().getColumnsAsString().replace(",", "_");
-        String unique =
-            change.getKey().getType() == com.stano.schema.model.KeyType.UNIQUE ? "UNIQUE " : "";
         w.println(
-            "CREATE "
-                + unique
-                + "INDEX "
-                + indexName
+            "CREATE UNIQUE INDEX "
+                + Naming.uniqueKeyName(DatabaseType.H2, change.getTableName(), change.getOrdinal())
+                + " ON "
+                + change.getTableName()
+                + " ("
+                + change.getKey().getColumnsAsString()
+                + ")");
+        break;
+      case INDEX:
+        w.println(
+            "CREATE INDEX "
+                + Naming.indexName(DatabaseType.H2, change.getTableName(), change.getOrdinal())
                 + " ON "
                 + change.getTableName()
                 + " ("
@@ -187,17 +201,18 @@ public class H2MigrationGenerator extends MigrationGenerator {
             "ALTER TABLE "
                 + change.getTableName()
                 + " DROP CONSTRAINT "
-                + change.getTableName()
-                + "_pkey");
+                + Naming.primaryKeyName(DatabaseType.H2, change.getTableName()));
         break;
       case UNIQUE:
+        w.println(
+            "DROP INDEX IF EXISTS "
+                + Naming.uniqueKeyName(
+                    DatabaseType.H2, change.getTableName(), change.getOrdinal()));
+        break;
       case INDEX:
-        String indexName =
-            "idx_"
-                + change.getTableName()
-                + "_"
-                + change.getKey().getColumnsAsString().replace(",", "_");
-        w.println("DROP INDEX IF EXISTS " + indexName);
+        w.println(
+            "DROP INDEX IF EXISTS "
+                + Naming.indexName(DatabaseType.H2, change.getTableName(), change.getOrdinal()));
         break;
     }
     w.print(options.getStatementSeparator());
@@ -232,10 +247,8 @@ public class H2MigrationGenerator extends MigrationGenerator {
   protected void generateAddRelation(AddRelationChange change) {
     PrintWriter w = options.getWriter();
     String fkName =
-        "fk_"
-            + change.getRelation().getFromTableName()
-            + "_"
-            + change.getRelation().getFromColumnName();
+        Naming.foreignKeyName(
+            DatabaseType.H2, change.getRelation().getFromTableName(), change.getOrdinal());
     String onDelete =
         change.getRelation().getType() == com.stano.schema.model.RelationType.CASCADE
             ? " ON DELETE CASCADE"
@@ -261,10 +274,8 @@ public class H2MigrationGenerator extends MigrationGenerator {
   protected void generateDropRelation(DropRelationChange change) {
     PrintWriter w = options.getWriter();
     String fkName =
-        "fk_"
-            + change.getRelation().getFromTableName()
-            + "_"
-            + change.getRelation().getFromColumnName();
+        Naming.foreignKeyName(
+            DatabaseType.H2, change.getRelation().getFromTableName(), change.getOrdinal());
     w.println(
         "ALTER TABLE " + change.getRelation().getFromTableName() + " DROP CONSTRAINT " + fkName);
     w.print(options.getStatementSeparator());

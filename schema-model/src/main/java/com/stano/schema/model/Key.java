@@ -90,11 +90,13 @@ public class Key {
   /**
    * Determines whether this key includes a column with the given name.
    *
-   * @param columnName the column name to look for (compared case-sensitively)
+   * @param columnName the column name to look for (compared case-insensitively)
    * @return {@code true} if a column of the key matches {@code columnName}
    */
   public boolean containsColumn(String columnName) {
-    return columns.stream().map(KeyColumn::getName).anyMatch(colName -> colName.equals(columnName));
+    return columns.stream()
+        .map(KeyColumn::getName)
+        .anyMatch(colName -> colName.equalsIgnoreCase(columnName));
   }
 
   /**

@@ -1,5 +1,7 @@
 package com.stano.schema.model;
 
+import java.util.Optional;
+
 /**
  * A single column definition within a {@link Table}, corresponding to a {@code <column>} element in
  * the XML schema. Captures the column's SQL name, type, size, nullability, default/check/enum
@@ -191,5 +193,41 @@ public class Column {
   /** Returns whether this column has a minimum and/or maximum value restriction. */
   public boolean hasMinOrMaxValue() {
     return minValue != null || maxValue != null;
+  }
+
+  /**
+   * Parses a {@code boolean} column's {@code default} attribute value.
+   *
+   * <p>Recognizes the truthy spellings {@code true/1/yes/on} and falsy spellings {@code
+   * false/0/no/off} (trimmed, case-insensitive), and treats the sentinel value {@code "null"} as
+   * meaning "no default constraint at all" (distinct from the attribute being absent, which callers
+   * represent by never invoking this method). Any other value is rejected.
+   *
+   * @param value the raw {@code default} attribute value; never {@code null}
+   * @return {@link Optional#empty()} for the {@code "null"} sentinel, otherwise the parsed boolean
+   * @throws IllegalArgumentException if {@code value} is not a recognized boolean spelling or the
+   *     {@code "null"} sentinel
+   */
+  public static Optional<Boolean> parseBooleanDefault(String value) {
+    String trimmed = value.trim();
+
+    if (trimmed.equalsIgnoreCase("null")) {
+      return Optional.empty();
+    }
+
+    switch (trimmed.toLowerCase()) {
+      case "true":
+      case "1":
+      case "yes":
+      case "on":
+        return Optional.of(Boolean.TRUE);
+      case "false":
+      case "0":
+      case "no":
+      case "off":
+        return Optional.of(Boolean.FALSE);
+      default:
+        throw new IllegalArgumentException("Unrecognized boolean default value: '" + value + "'");
+    }
   }
 }

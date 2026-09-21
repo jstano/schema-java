@@ -1,7 +1,6 @@
 package com.stano.schema.reverseengineer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -42,10 +41,10 @@ public class SchemaReaderTest {
   }
 
   @Test
-  @DisplayName("getColumnType throws for truly unknown JDBC type constant")
+  @DisplayName("getColumnType falls back to TEXT for truly unknown JDBC type constant")
   void testUnknownJdbcType() {
-    assertThrows(
-        IllegalArgumentException.class, () -> reader.getColumnType(9999, "unknown", false, 0));
+    ColumnType result = reader.getColumnType(9999, "unknown", false, 0);
+    assertEquals(ColumnType.TEXT, result);
   }
 
   @Test
@@ -69,7 +68,7 @@ public class SchemaReaderTest {
     when(importedKeysResultSet.getString("DELETE_RULE")).thenReturn("importedKeyCascade");
     when(importedKeysResultSet.getString("UPDATE_RULE")).thenReturn("importedNoAction");
 
-    reader.populateImportedKeys(schema, metaData);
+    reader.populateImportedKeys(schema, metaData, null);
 
     assertEquals(1, table.getRelations().size());
     RelationType relationType = table.getRelations().get(0).getType();
@@ -102,7 +101,7 @@ public class SchemaReaderTest {
     when(importedKeysResultSet.getString("DELETE_RULE")).thenReturn("importedNoAction");
     when(importedKeysResultSet.getString("UPDATE_RULE")).thenReturn("importedKeyCascade");
 
-    reader.populateImportedKeys(schema, metaData);
+    reader.populateImportedKeys(schema, metaData, null);
 
     assertEquals(1, table.getRelations().size());
     RelationType relationType = table.getRelations().get(0).getType();

@@ -1,5 +1,6 @@
 package com.stano.schema.gensql;
 
+import com.stano.schema.gensql.impl.common.DialectValidator;
 import com.stano.schema.gensql.impl.common.OutputMode;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.gensql.impl.common.SQLGeneratorFactory;
@@ -14,6 +15,8 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URL;
+import java.util.List;
+import java.util.Set;
 import org.apache.commons.io.IOUtils;
 
 /**
@@ -314,7 +317,7 @@ public class GenSQL {
             "USAGE: GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]"
                 + " [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]"
                 + " [--postgresql-version=N] [--no-postgres-extensions]"
-                + " [--extension-check-user=name]");
+                + " [--extension-check-user=name] [--output-file=path]");
         System.out.println(
             "   where <target-database> is one or more of: [H2,POSTGRESQL,SQL_SERVER] separated by"
                 + " commas");
@@ -334,6 +337,9 @@ public class GenSQL {
         System.out.println(
             "   and   <extension-check-user> is the Postgres role whose superuser privilege is"
                 + " checked in the create extension block (default is CURRENT_USER)");
+        System.out.println(
+            "   and   <output-file> overrides the default output path; only valid when exactly"
+                + " one target database is requested");
         System.exit(1);
       }
 
@@ -347,6 +353,7 @@ public class GenSQL {
       int targetPostgresVersion = 0;
       boolean emitPostgresExtensions = true;
       String extensionCheckUser = null;
+      String outputFile = null;
 
       for (String arg : args) {
         if (arg.startsWith("--foreign-key-mode=")) {
@@ -365,16 +372,49 @@ public class GenSQL {
           emitPostgresExtensions = false;
         } else if (arg.startsWith("--extension-check-user=")) {
           extensionCheckUser = arg.substring("--extension-check-user=".length());
+        } else if (arg.startsWith("--output-file=")) {
+          outputFile = arg.substring("--output-file=".length());
         }
+      }
+
+      Set<DatabaseType> databaseTypes = DatabaseType.getDatabaseTypes(targetDatabases);
+
+      if (outputFile != null && databaseTypes.size() != 1) {
+        System.err.println(
+            "ERROR: --output-file may only be used with exactly one target database");
+        System.exit(1);
+      }
+
+      boolean hasErrors = false;
+      for (DatabaseType databaseType : databaseTypes) {
+        List<String> validationErrors = DialectValidator.validateForDialect(schema, databaseType);
+
+        if (!validationErrors.isEmpty()) {
+          hasErrors = true;
+          validationErrors.forEach(System.err::println);
+        }
+      }
+
+      if (hasErrors) {
+        System.exit(1);
       }
 
       GenSQL genSQL = new GenSQL();
 
-      for (DatabaseType databaseType : DatabaseType.getDatabaseTypes(targetDatabases)) {
+      for (DatabaseType databaseType : databaseTypes) {
+        File targetFile =
+            outputFile != null
+                ? new File(outputFile)
+                : createOutputFile(schemaFilename, databaseType);
+
+        if (targetFile.getParentFile() != null) {
+          targetFile.getParentFile().mkdirs();
+        }
+
         genSQL.generateSQL(
             databaseType,
             schema,
-            new PrintWriter(new FileWriter(createOutputFile(schemaFilename, databaseType))),
+            new PrintWriter(new FileWriter(targetFile)),
             foreignKeyMode,
             booleanMode,
             outputMode,

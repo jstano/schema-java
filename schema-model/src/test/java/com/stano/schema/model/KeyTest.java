@@ -59,9 +59,9 @@ class KeyTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"Id,true", "code,true", "id,false", "missing,false"})
+  @CsvSource({"Id,true", "code,true", "id,true", "missing,false"})
   @DisplayName(
-      "containsColumn should return true only when the exact column name exists (case-sensitive)")
+      "containsColumn should return true when the column name exists, compared case-insensitively")
   void containsColumnShouldReturnTrueOnlyWhenExactColumnNameExists(
       String testName, boolean expected) {
     Key key = new Key(KeyType.PRIMARY, List.of(new KeyColumn("Id"), new KeyColumn("code")));

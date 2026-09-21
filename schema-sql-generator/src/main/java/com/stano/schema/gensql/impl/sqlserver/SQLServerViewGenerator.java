@@ -25,10 +25,7 @@ class SQLServerViewGenerator extends ViewGenerator {
     String viewName = getFullyQualifiedViewName(view);
 
     sqlWriter.println(String.format("/* %s */", viewName));
-    sqlWriter.println(
-        "if exists (select name from dbo.sysobjects where name = '"
-            + view.getName()
-            + "' and type = 'V')");
+    sqlWriter.println("if object_id('" + escapeSqlLiteral(viewName) + "', 'V') is not null");
     sqlWriter.println("   drop view " + viewName + statementSeparator);
     sqlWriter.println("create view " + viewName + " as");
     sqlWriter.println("   " + view.getSql() + statementSeparator);

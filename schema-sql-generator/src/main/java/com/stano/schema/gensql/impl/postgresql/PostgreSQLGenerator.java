@@ -1,5 +1,6 @@
 package com.stano.schema.gensql.impl.postgresql;
 
+import com.stano.schema.gensql.impl.common.ColumnConstraintGenerator;
 import com.stano.schema.gensql.impl.common.FunctionGenerator;
 import com.stano.schema.gensql.impl.common.IndexGenerator;
 import com.stano.schema.gensql.impl.common.OtherSqlGenerator;
@@ -12,6 +13,8 @@ import com.stano.schema.gensql.impl.common.TriggerGenerator;
 import com.stano.schema.gensql.impl.common.ViewGenerator;
 import com.stano.schema.model.EnumType;
 import java.util.Comparator;
+import java.util.List;
+import java.util.TreeSet;
 
 public class PostgreSQLGenerator extends SQLGenerator {
 
@@ -41,11 +44,34 @@ public class PostgreSQLGenerator extends SQLGenerator {
   @Override
   protected void outputHeader() {
 
+    createSchemas();
     createUUIDGeneratorFunction();
     if (getSqlGeneratorOptions().isEmitPostgresExtensions()) {
       createExtensions();
     }
     createEnumTypes();
+  }
+
+  private void createSchemas() {
+
+    List<String> schemaNames =
+        schema.getTables().stream()
+            .map(com.stano.schema.model.Table::getSchemaName)
+            .filter(name -> name != null && !name.equalsIgnoreCase("public"))
+            .collect(
+                java.util.stream.Collectors.collectingAndThen(
+                    java.util.stream.Collectors.toCollection(
+                        () -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)),
+                    java.util.ArrayList::new));
+
+    if (schemaNames.isEmpty()) {
+      return;
+    }
+
+    for (String schemaName : schemaNames) {
+      sqlWriter.println("create schema if not exists " + schemaName + statementSeparator);
+    }
+    sqlWriter.println();
   }
 
   @Override
@@ -144,11 +170,15 @@ public class PostgreSQLGenerator extends SQLGenerator {
 
     String checkUser = getSqlGeneratorOptions().getExtensionCheckUser();
     String checkUserExpr = checkUser == null ? "CURRENT_USER" : "'" + checkUser + "'";
+    boolean needsPgcrypto = getSqlGeneratorOptions().getTargetPostgresVersion() < 18;
 
     sqlWriter.println("do $$");
     sqlWriter.println("begin");
     sqlWriter.println(
         "   if (select usesuper from pg_user where usename = " + checkUserExpr + ") then");
+    if (needsPgcrypto) {
+      sqlWriter.println("      create extension if not exists \"pgcrypto\";");
+    }
     sqlWriter.println("      create extension if not exists \"citext\";");
     sqlWriter.println("      create extension if not exists \"btree_gist\";");
     sqlWriter.println("   else");
@@ -183,5 +213,10 @@ public class PostgreSQLGenerator extends SQLGenerator {
           "create type " + enumName + " as enum (" + values + ")" + statementSeparator);
       sqlWriter.println();
     }
+  }
+
+  @Override
+  public ColumnConstraintGenerator getColumnConstraintGenerator() {
+    return new PostgreSQLColumnConstraintGenerator(this);
   }
 }

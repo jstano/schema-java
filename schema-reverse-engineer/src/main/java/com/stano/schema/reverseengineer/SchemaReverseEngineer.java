@@ -61,6 +61,12 @@ public class SchemaReverseEngineer {
               .required()
               .desc("file to write schema to")
               .get());
+      options.addOption(
+          Option.builder()
+              .longOpt("db-schema")
+              .hasArg()
+              .desc("database schema to introspect (default: public)")
+              .get());
 
       var parser = new DefaultParser();
       var cmd = parser.parse(options, args);
@@ -72,7 +78,8 @@ public class SchemaReverseEngineer {
               cmd.getOptionValue("password"))) {
         var schemaFile = new File(cmd.getOptionValue("file"));
         var schemaReader = new SchemaReader();
-        var schema = schemaReader.readSchema(connection);
+        var dbSchema = cmd.getOptionValue("db-schema", SchemaReader.DEFAULT_SCHEMA);
+        var schema = schemaReader.readSchema(connection, dbSchema);
 
         try (var writer = new PrintWriter(new FileWriter(schemaFile))) {
           var schemaWriter = new SchemaWriter(writer);

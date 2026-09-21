@@ -1,6 +1,7 @@
 package com.stano.schema.genmigration.impl.postgresql;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.ChangeSet;
@@ -21,6 +22,8 @@ import com.stano.schema.genmigration.impl.common.MigrationGeneratorOptions;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.EnumType;
+import com.stano.schema.model.EnumValue;
 import com.stano.schema.model.Function;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyColumn;
@@ -28,6 +31,7 @@ import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
+import com.stano.schema.model.Schema;
 import com.stano.schema.model.View;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -97,13 +101,73 @@ class PostgreSQLMigrationGeneratorTest {
   }
 
   @Test
+  @DisplayName("add-column emits a CHECK constraint matching min/max bounds")
+  void generatesAddColumnMinMaxCheckConstraint() {
+    ChangeSet changeSet = new ChangeSet();
+    Column col =
+        new Column("price", ColumnType.INT, 0, 0, false, null, null, null, "0", "100", null, null);
+    changeSet.addChange(new AddColumnChange("product", col));
+
+    Schema schema = new Schema(null);
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL, schema);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(
+        sql.contains("ADD CONSTRAINT ck_product_price_")
+            && sql.contains("check(price >= 0 and price <= 100)"),
+        "expected a min/max CHECK constraint, got: " + sql);
+  }
+
+  @Test
+  @DisplayName("add-column does not emit a CHECK constraint for enum columns (native enum type)")
+  void generatesAddColumnEnumDoesNotEmitCheckConstraint() {
+    EnumType enumType = new EnumType("status_type");
+    enumType.addValue(new EnumValue("ACTIVE", "A"));
+    enumType.addValue(new EnumValue("INACTIVE", "I"));
+    Schema schema = new Schema(null);
+    schema.addEnumType(enumType);
+
+    ChangeSet changeSet = new ChangeSet();
+    Column col =
+        new Column(
+            "status",
+            ColumnType.ENUM,
+            0,
+            0,
+            true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "status_type",
+            null);
+    changeSet.addChange(new AddColumnChange("location", col));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL, schema);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertFalse(sql.toLowerCase().contains("check"), "expected no CHECK constraint, got: " + sql);
+  }
+
+  @Test
   @DisplayName("generates PRIMARY KEY for add-key change")
   void generatesAddPrimaryKey() {
     ChangeSet changeSet = new ChangeSet();
     List<KeyColumn> cols = new ArrayList<>();
     cols.add(new KeyColumn("id"));
     Key key = new Key(KeyType.PRIMARY, cols);
-    changeSet.addChange(new AddKeyChange("users", key));
+    changeSet.addChange(new AddKeyChange("users", key, 1));
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
@@ -123,7 +187,7 @@ class PostgreSQLMigrationGeneratorTest {
     List<KeyColumn> cols = new ArrayList<>();
     cols.add(new KeyColumn("email"));
     Key key = new Key(KeyType.UNIQUE, cols);
-    changeSet.addChange(new AddKeyChange("users", key));
+    changeSet.addChange(new AddKeyChange("users", key, 1));
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
@@ -143,7 +207,7 @@ class PostgreSQLMigrationGeneratorTest {
   void generatesAddRelation() {
     ChangeSet changeSet = new ChangeSet();
     Relation rel = new Relation("posts", "user_id", "users", "id", RelationType.CASCADE, false);
-    changeSet.addChange(new AddRelationChange(rel));
+    changeSet.addChange(new AddRelationChange(rel, 1));
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);

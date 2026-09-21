@@ -72,14 +72,13 @@ public abstract class ColumnGenerator extends BaseGenerator {
 
     if (column.getType() == ColumnType.BOOLEAN) {
       if (defaultValue != null) {
-        if (defaultValue.equalsIgnoreCase("null")) {
-          defaultValue = null;
-        } else {
-          defaultValue = convertBooleanDefaultConstraint(Boolean.parseBoolean(defaultValue));
-        }
-      } else {
-        defaultValue = convertBooleanDefaultConstraint(false);
+        defaultValue =
+            Column.parseBooleanDefault(defaultValue)
+                .map(this::convertBooleanDefaultConstraint)
+                .orElse(null);
       }
+      // No `default` attribute at all means no default constraint — do not silently default
+      // a nullable boolean column to `false`.
     } else if (column.getType() == ColumnType.UUID) {
       List<String> primaryKeyColumns = table.getPrimaryKeyColumns();
 

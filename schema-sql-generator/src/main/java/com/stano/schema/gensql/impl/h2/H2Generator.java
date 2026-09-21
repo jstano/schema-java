@@ -1,5 +1,6 @@
 package com.stano.schema.gensql.impl.h2;
 
+import com.stano.schema.gensql.impl.common.ColumnConstraintGenerator;
 import com.stano.schema.gensql.impl.common.IndexGenerator;
 import com.stano.schema.gensql.impl.common.RelationGenerator;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
@@ -62,4 +63,9 @@ public class H2Generator extends SQLGenerator {
 
   @Override
   protected void outputProcedures() {}
+
+  @Override
+  public ColumnConstraintGenerator getColumnConstraintGenerator() {
+    return new H2ColumnConstraintGenerator(this);
+  }
 }

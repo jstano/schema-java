@@ -14,7 +14,13 @@ public class TableConstraintGenerator extends BaseGenerator {
   public List<String> getTableCheckConstraints(Table table) {
     List<Constraint> columns = table.getConstraints();
 
-    return columns.stream().map(constraint -> generateConstraint(table, constraint)).toList();
+    return columns.stream()
+        .filter(
+            constraint ->
+                constraint.getDatabaseType() == null
+                    || constraint.getDatabaseType() == databaseType)
+        .map(constraint -> generateConstraint(table, constraint))
+        .toList();
   }
 
   private String generateConstraint(Table table, Constraint constraint) {

@@ -163,6 +163,18 @@ The diff engine always emits a drop+add pair for column renames; when it detects
 java -cp ... com.stano.schema.git.GitSchemaDiffCli my-schema.xml -d postgresql -o migration.sql
 ```
 
+Instead of the positional schema-file argument, `--old`/`--new` can be given to diff two arbitrary schema sources — each one either a plain file path or a git `<rev>:<path>` reference (e.g. `HEAD:schema.xml`, `v1.2.0:schema/schema.xml`):
+
+```bash
+java -cp ... com.stano.schema.git.GitSchemaDiffCli --old v1.2.0:schema.xml --new HEAD:schema.xml -d postgresql
+```
+
+`--auto-generate-name` (only usable with the positional schema-file form) writes the output as `V{timestamp}[__{description}].sql` alongside the schema file instead of using `-o`:
+
+```bash
+java -cp ... com.stano.schema.git.GitSchemaDiffCli my-schema.xml --auto-generate-name --description "add users table"
+```
+
 ## XML Schema Format
 
 The root element is `<database>`.

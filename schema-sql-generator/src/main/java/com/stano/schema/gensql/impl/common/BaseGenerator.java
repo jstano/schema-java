@@ -3,6 +3,7 @@ package com.stano.schema.gensql.impl.common;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
+import com.stano.schema.model.Naming;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import com.stano.schema.model.View;
@@ -42,15 +43,14 @@ public class BaseGenerator {
   }
 
   protected String buildKeyName(String prefix, String tableName, String suffix) {
-    String candidate = prefix + tableName + suffix;
+    // Delegates to the shared com.stano.schema.model.Naming utility, which is the single
+    // source of truth for this logic — also used by schema-migration-generator's alter path
+    // so a migration's DROP targets the exact name the create path would have produced.
+    return Naming.buildName(databaseType, prefix, tableName, suffix);
+  }
 
-    if (candidate.length() <= maxKeyNameLength) {
-      return candidate;
-    }
-
-    int available = maxKeyNameLength - (prefix.length() + suffix.length());
-    int truncateTo = Math.max(0, Math.min(available, tableName.length()));
-
-    return prefix + tableName.substring(0, truncateTo) + suffix;
+  /** Escapes a single-quoted SQL string literal by doubling any embedded single quotes. */
+  protected static String escapeSqlLiteral(String value) {
+    return value.replace("'", "''");
   }
 }

@@ -247,15 +247,47 @@ public class Schema {
 
   /**
    * Validates cross-table integrity rules that cannot be checked while a single table is being
-   * built. Currently checks that no {@link RelationType#SETNULL} relation targets a required
-   * (non-nullable) column.
+   * built: duplicate table names, tables with more than one identity column, that no {@link
+   * RelationType#SETNULL} relation targets a required (non-nullable) column, enum columns with no
+   * {@code enumType}, array columns with no {@code elementType}, boolean columns with an
+   * unrecognized {@code default} value, and char/varchar columns with no positive length.
    *
    * @return a list of human-readable error messages; empty if the schema is valid
    */
   public List<String> validate() {
     List<String> errors = new ArrayList<String>();
 
+    Map<String, String> seenTableNames = new HashMap<>();
     for (Table table : tables) {
+      String nameLower = table.getName().toLowerCase();
+
+      if (seenTableNames.containsKey(nameLower)) {
+        errors.add(
+            String.format(
+                "ERROR: duplicate table name '%s'; table names must be unique within a schema"
+                    + " (comparison is case-insensitive)",
+                table.getName()));
+      } else {
+        seenTableNames.put(nameLower, table.getName());
+      }
+    }
+
+    for (Table table : tables) {
+      List<String> identityColumns =
+          table.getColumns().stream()
+              .filter(
+                  c -> c.getType() == ColumnType.SEQUENCE || c.getType() == ColumnType.LONGSEQUENCE)
+              .map(Column::getName)
+              .collect(Collectors.toList());
+
+      if (identityColumns.size() > 1) {
+        errors.add(
+            String.format(
+                "ERROR: table %s has more than one identity column (%s); a table may have at most"
+                    + " one sequence/longsequence column",
+                table.getName(), String.join(", ", identityColumns)));
+      }
+
       for (Relation relation : table.getRelations()) {
         if (relation.getType() == RelationType.SETNULL) {
           String fromTableName = relation.getFromTableName();
@@ -273,6 +305,43 @@ public class Schema {
                     relation.getToTableName(),
                     relation.getToColumnName()));
           }
+        }
+      }
+
+      for (Column column : table.getColumns()) {
+        if (column.getType() == ColumnType.ENUM && column.getEnumType() == null) {
+          errors.add(
+              String.format(
+                  "ERROR: %s.%s is an enum column but has no enumType",
+                  table.getName(), column.getName()));
+        }
+
+        if (column.getType() == ColumnType.ARRAY && column.getElementType() == null) {
+          errors.add(
+              String.format(
+                  "ERROR: %s.%s is an array column but has no elementType",
+                  table.getName(), column.getName()));
+        }
+
+        if (column.getType() == ColumnType.BOOLEAN && column.getDefaultConstraint() != null) {
+          try {
+            Column.parseBooleanDefault(column.getDefaultConstraint());
+          } catch (IllegalArgumentException e) {
+            errors.add(
+                String.format(
+                    "ERROR: %s.%s has default '%s', which is not a recognized boolean value"
+                        + " (expected true/false, 1/0, yes/no, on/off, or 'null' for no default)",
+                    table.getName(), column.getName(), column.getDefaultConstraint()));
+          }
+        }
+
+        if ((column.getType() == ColumnType.CHAR || column.getType() == ColumnType.VARCHAR)
+            && column.getLength() <= 0) {
+          errors.add(
+              String.format(
+                  "ERROR: %s.%s is a %s column with no length (or length <= 0); a length attribute"
+                      + " greater than zero is required",
+                  table.getName(), column.getName(), column.getType()));
         }
       }
     }

@@ -5,13 +5,13 @@ import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
 
-class PostgreSQLColumnConstraintGenerator extends ColumnConstraintGenerator {
-  PostgreSQLColumnConstraintGenerator(SQLGenerator sqlGenerator) {
+public class PostgreSQLColumnConstraintGenerator extends ColumnConstraintGenerator {
+  public PostgreSQLColumnConstraintGenerator(SQLGenerator sqlGenerator) {
     super(sqlGenerator);
   }
 
   @Override
-  protected String getCheckConstraintSQL(Column column) {
+  public String getCheckConstraintSQL(Column column) {
     if (column.getType() == ColumnType.ENUM) {
       return null;
     }

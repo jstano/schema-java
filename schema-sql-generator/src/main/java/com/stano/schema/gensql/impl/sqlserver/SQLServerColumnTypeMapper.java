@@ -59,7 +59,9 @@ public class SQLServerColumnTypeMapper extends ColumnTypeMapper {
 
   @Override
   protected String getTextSql(Column column) {
-    return "nvarchar(max)";
+    return column != null && column.getLength() > 0
+        ? "nvarchar(" + column.getLength() + ")"
+        : "nvarchar(max)";
   }
 
   @Override

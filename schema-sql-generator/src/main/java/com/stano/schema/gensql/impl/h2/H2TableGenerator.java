@@ -7,6 +7,7 @@ import com.stano.schema.gensql.impl.common.KeyGenerator;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.gensql.impl.common.TableConstraintGenerator;
 import com.stano.schema.gensql.impl.common.TableGenerator;
+import com.stano.schema.model.Table;
 
 class H2TableGenerator extends TableGenerator {
   private final ColumnGenerator columnGenerator;
@@ -48,5 +49,21 @@ class H2TableGenerator extends TableGenerator {
   @Override
   protected IndexGenerator getIndexGenerator() {
     return indexGenerator;
+  }
+
+  @Override
+  protected void outputTableDrop(Table table) {
+    String tableName = getFullyQualifiedTableName(table);
+
+    sqlWriter.println(String.format("/* %s */", tableName));
+    sqlWriter.println("drop table if exists " + tableName + " cascade" + statementSeparator);
+  }
+
+  @Override
+  protected void outputTableHeader(Table table) {
+    String tableName = getFullyQualifiedTableName(table);
+
+    sqlWriter.println("create table " + tableName);
+    sqlWriter.println("(");
   }
 }
