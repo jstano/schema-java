@@ -674,7 +674,15 @@ class SchemaDiffEngineTest {
     newCols.add(new KeyColumn("email"));
     newTable
         .getIndexes()
-        .add(new Key(KeyType.INDEX, newCols, false, false, true, null, "email is not null and email <> ''"));
+        .add(
+            new Key(
+                KeyType.INDEX,
+                newCols,
+                false,
+                false,
+                true,
+                null,
+                "email is not null and email <> ''"));
     newSchema.addTable(newTable);
 
     SchemaDiffEngine engine = new SchemaDiffEngine();

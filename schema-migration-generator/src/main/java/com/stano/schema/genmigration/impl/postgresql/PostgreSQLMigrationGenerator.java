@@ -217,17 +217,22 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
         }
         break;
       case UNIQUE:
-        w.println(
-            "CREATE UNIQUE INDEX IF NOT EXISTS "
-                + Naming.uniqueKeyName(
-                    DatabaseType.POSTGRESQL, change.getTableName(), change.getOrdinal())
-                + " ON "
-                + change.getTableName()
-                + " ("
-                + change.getKey().getColumnsAsString()
-                + ")");
-        w.print(options.getStatementSeparator());
-        w.println();
+        {
+          String constraintName =
+              Naming.uniqueKeyName(
+                  DatabaseType.POSTGRESQL, change.getTableName(), change.getOrdinal());
+          writeGuardedAddConstraint(
+              w,
+              change.getTableName(),
+              constraintName,
+              "ALTER TABLE "
+                  + change.getTableName()
+                  + " ADD CONSTRAINT "
+                  + constraintName
+                  + " UNIQUE ("
+                  + change.getKey().getColumnsAsString()
+                  + ");");
+        }
         break;
       case INDEX:
         w.println(
@@ -263,7 +268,9 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
         break;
       case UNIQUE:
         w.println(
-            "DROP INDEX IF EXISTS "
+            "ALTER TABLE "
+                + change.getTableName()
+                + " DROP CONSTRAINT IF EXISTS "
                 + Naming.uniqueKeyName(
                     DatabaseType.POSTGRESQL, change.getTableName(), change.getOrdinal()));
         break;

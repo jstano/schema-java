@@ -317,7 +317,7 @@ class SQLServerMigrationGeneratorTest {
   }
 
   @Test
-  @DisplayName("guards ADD unique index with a sys.indexes existence check")
+  @DisplayName("guards ADD unique key with a sys.key_constraints existence check")
   void generatesAddUniqueKeyIsGuarded() {
     ChangeSet changeSet = new ChangeSet();
     List<KeyColumn> cols = new ArrayList<>();
@@ -333,8 +333,36 @@ class SQLServerMigrationGeneratorTest {
     gen.generate();
 
     String sql = sw.toString();
-    assertTrue(
-        sql.contains("IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name ="), "got: " + sql);
+    assertAll(
+        () ->
+            assertTrue(
+                sql.contains("FROM sys.key_constraints WHERE name = 'ak_users1'"), "got: " + sql),
+        () -> assertTrue(sql.contains("ADD CONSTRAINT ak_users1 UNIQUE (email)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("guards DROP unique key with a sys.key_constraints existence check")
+  void generatesDropUniqueKeyIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("email"));
+    Key key = new Key(KeyType.UNIQUE, cols);
+    changeSet.addChange(new DropKeyChange("users", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.SQL_SERVER);
+    SQLServerMigrationGenerator gen = new SQLServerMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () ->
+            assertTrue(
+                sql.contains("EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'ak_users1'"),
+                "got: " + sql),
+        () -> assertTrue(sql.contains("DROP CONSTRAINT ak_users1"), "got: " + sql));
   }
 
   @Test
@@ -343,8 +371,7 @@ class SQLServerMigrationGeneratorTest {
     ChangeSet changeSet = new ChangeSet();
     List<KeyColumn> cols = new ArrayList<>();
     cols.add(new KeyColumn("parent_id"));
-    Key key =
-        new Key(KeyType.INDEX, cols, false, false, true, null, "parent_id is not null");
+    Key key = new Key(KeyType.INDEX, cols, false, false, true, null, "parent_id is not null");
     changeSet.addChange(new AddKeyChange("users", key, 1));
 
     StringWriter sw = new StringWriter();

@@ -237,13 +237,15 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
               Naming.uniqueKeyName(
                   DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal());
           w.println(
-              "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '"
+              "IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = '"
                   + constraintName
-                  + "') CREATE UNIQUE INDEX "
-                  + constraintName
-                  + " ON "
+                  + "' AND parent_object_id = OBJECT_ID('"
                   + change.getTableName()
-                  + " ("
+                  + "')) ALTER TABLE "
+                  + change.getTableName()
+                  + " ADD CONSTRAINT "
+                  + constraintName
+                  + " UNIQUE ("
                   + change.getKey().getColumnsAsString()
                   + ")");
         }
@@ -298,12 +300,14 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
               Naming.uniqueKeyName(
                   DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal());
           w.println(
-              "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = '"
+              "IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = '"
                   + constraintName
-                  + "') DROP INDEX "
-                  + constraintName
-                  + " ON "
-                  + change.getTableName());
+                  + "' AND parent_object_id = OBJECT_ID('"
+                  + change.getTableName()
+                  + "')) ALTER TABLE "
+                  + change.getTableName()
+                  + " DROP CONSTRAINT "
+                  + constraintName);
         }
         break;
       case INDEX:

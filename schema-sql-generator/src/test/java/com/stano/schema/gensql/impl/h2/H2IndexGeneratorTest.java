@@ -46,8 +46,7 @@ class H2IndexGeneratorTest {
     String sql = generateIndexesSql(table);
 
     assertTrue(
-        sql.contains("create unique index ix_parenttable1 on public.ParentTable (ParentId)"),
-        sql);
+        sql.contains("create unique index ix_parenttable1 on public.ParentTable (ParentId)"), sql);
     assertFalse(sql.contains("where"), sql);
   }
 

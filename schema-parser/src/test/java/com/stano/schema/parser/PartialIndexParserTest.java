@@ -87,7 +87,8 @@ class PartialIndexParserTest {
     Schema schema = parse(tableXml);
     Table table = schema.getTable("T");
 
-    assertEquals(0, (int) table.getKeys().stream().filter(k -> k.getType() == KeyType.UNIQUE).count());
+    assertEquals(
+        0, (int) table.getKeys().stream().filter(k -> k.getType() == KeyType.UNIQUE).count());
     assertEquals(1, table.getIndexes().size());
 
     Key index = table.getIndexes().get(0);

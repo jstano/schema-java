@@ -187,7 +187,7 @@ class PostgreSQLMigrationGeneratorTest {
   }
 
   @Test
-  @DisplayName("generates UNIQUE INDEX for unique key")
+  @DisplayName("guards ADD unique key with a pg_constraint existence check")
   void generatesUniqueIndex() {
     ChangeSet changeSet = new ChangeSet();
     List<KeyColumn> cols = new ArrayList<>();
@@ -204,8 +204,30 @@ class PostgreSQLMigrationGeneratorTest {
 
     String sql = sw.toString();
     assertAll(
-        () -> assertTrue(sql.contains("CREATE UNIQUE INDEX")),
-        () -> assertTrue(sql.contains("users")));
+        () -> assertTrue(sql.contains("DO $$"), "got: " + sql),
+        () -> assertTrue(sql.contains("FROM pg_constraint WHERE conname ="), "got: " + sql),
+        () -> assertTrue(sql.contains("ADD CONSTRAINT ak_users1 UNIQUE (email)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("guards DROP unique key with a DROP CONSTRAINT IF EXISTS")
+  void generatesDropUniqueKey() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("email"));
+    Key key = new Key(KeyType.UNIQUE, cols);
+    changeSet.addChange(new DropKeyChange("users", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(
+        sql.contains("ALTER TABLE users DROP CONSTRAINT IF EXISTS ak_users1"), "got: " + sql);
   }
 
   @Test
@@ -214,8 +236,7 @@ class PostgreSQLMigrationGeneratorTest {
     ChangeSet changeSet = new ChangeSet();
     List<KeyColumn> cols = new ArrayList<>();
     cols.add(new KeyColumn("parent_id"));
-    Key key =
-        new Key(KeyType.INDEX, cols, false, false, true, null, "parent_id is not null");
+    Key key = new Key(KeyType.INDEX, cols, false, false, true, null, "parent_id is not null");
     changeSet.addChange(new AddKeyChange("users", key, 1));
 
     StringWriter sw = new StringWriter();
