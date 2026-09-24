@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.stano.schema.gendiagram.DiagramFormat;
 import com.stano.schema.gendiagram.DiagramGeneratorOptions;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyColumn;
@@ -16,6 +17,7 @@ import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -158,5 +160,50 @@ class PlantUMLERDiagramGeneratorTest {
     String text = output.toString();
 
     assertTrue(text.contains("ORDER }o--|| CUSTOMER : customer_id"));
+  }
+
+  @Test
+  @DisplayName("should list all from-columns for composite relations")
+  void compositeRelationListsAllFromColumns() {
+    Schema schema = buildSchema();
+    Table parent = buildTable(schema, "PARENT");
+    parent.getColumns().add(new Column("id", ColumnType.INT, 0, true));
+    parent.getColumns().add(new Column("tenant_id", ColumnType.INT, 0, true));
+    parent
+        .getKeys()
+        .add(
+            new Key(
+                KeyType.PRIMARY,
+                new java.util.ArrayList<>(
+                    java.util.List.of(new KeyColumn("id"), new KeyColumn("tenant_id")))));
+
+    Table child = buildTable(schema, "CHILD");
+    child.getColumns().add(new Column("id", ColumnType.INT, 0, true));
+    child.getColumns().add(new Column("parent_id", ColumnType.INT, 0, false));
+    child.getColumns().add(new Column("tenant_id", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(
+            Relation.composite(
+                "CHILD",
+                "PARENT",
+                List.of(
+                    new ColumnPair("parent_id", "id"), new ColumnPair("tenant_id", "tenant_id")),
+                RelationType.CASCADE,
+                false));
+
+    StringWriter output = new StringWriter();
+    PrintWriter writer = new PrintWriter(output);
+    PlantUMLERDiagramGenerator generator =
+        new PlantUMLERDiagramGenerator(
+            new DiagramGeneratorOptions(schema, writer, DiagramFormat.PLANTUML));
+
+    generator.generate();
+    writer.flush();
+    String text = output.toString();
+
+    assertTrue(text.contains("CHILD }o--|| PARENT : parent_id, tenant_id"), text);
+    assertTrue(text.contains("parent_id : INT <<FK>>"), text);
+    assertTrue(text.contains("tenant_id : INT <<FK>>"), text);
   }
 }

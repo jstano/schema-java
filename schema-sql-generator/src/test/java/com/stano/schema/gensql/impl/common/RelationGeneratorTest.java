@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
@@ -14,6 +15,7 @@ import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
@@ -139,6 +141,37 @@ class RelationGeneratorTest {
             fkName, fkName.toLowerCase(), "FK constraint name should be lowercase: " + fkName);
       }
     }
+  }
+
+  @Test
+  @DisplayName("composite relation lists all column pairs in the foreign key clause")
+  void compositeRelationListsAllColumnPairs() {
+    Schema schema = new Schema(null);
+
+    Table sourceTable = new Table(null, "public", "assignment", null, null, false);
+    sourceTable.getColumns().add(new Column("id", ColumnType.INT, 0, false));
+    sourceTable.getColumns().add(new Column("parent_id", ColumnType.INT, 0, false));
+    sourceTable.getColumns().add(new Column("property_id", ColumnType.INT, 0, false));
+    schema.addTable(sourceTable);
+
+    Relation relation =
+        Relation.composite(
+            "assignment",
+            "assignment",
+            List.of(
+                new ColumnPair("parent_id", "id"), new ColumnPair("property_id", "property_id")),
+            RelationType.CASCADE,
+            false);
+    sourceTable.getRelations().add(relation);
+
+    String output = generateRelationsSql(schema);
+
+    assertTrue(
+        output.contains("foreign key (parent_id, property_id) references"),
+        "expected composite foreign key columns in output: " + output);
+    assertTrue(
+        output.contains("(id, property_id) on delete cascade"),
+        "expected composite referenced columns in output: " + output);
   }
 
   private String generateRelationsSql(Schema schema) {

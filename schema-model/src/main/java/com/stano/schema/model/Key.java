@@ -15,6 +15,7 @@ public class Key {
   private final boolean compress;
   private final boolean unique;
   private final String include;
+  private final String filter;
 
   /**
    * Creates a fully-specified key.
@@ -33,12 +34,35 @@ public class Key {
       boolean compress,
       boolean unique,
       String include) {
+    this(type, columns, cluster, compress, unique, include, null);
+  }
+
+  /**
+   * Creates a fully-specified key with a partial/filtered index predicate.
+   *
+   * @param type whether this is a primary key, unique key, or index
+   * @param columns the ordered columns making up the key
+   * @param cluster whether the key should be created as a clustered index
+   * @param compress whether the key should be created with data compression enabled
+   * @param unique whether the key enforces uniqueness (for indexes)
+   * @param include a comma-separated list of covering (included) columns, or {@code null}
+   * @param filter a partial/filtered index {@code WHERE} predicate, or {@code null}
+   */
+  public Key(
+      KeyType type,
+      List<KeyColumn> columns,
+      boolean cluster,
+      boolean compress,
+      boolean unique,
+      String include,
+      String filter) {
     this.type = type;
     this.columns = List.copyOf(columns);
     this.cluster = cluster;
     this.compress = compress;
     this.unique = unique;
     this.include = include;
+    this.filter = filter;
   }
 
   /**
@@ -55,6 +79,7 @@ public class Key {
     this.compress = false;
     this.unique = false;
     this.include = null;
+    this.filter = null;
   }
 
   /** Returns whether this is a primary key, unique key, or index. */
@@ -85,6 +110,11 @@ public class Key {
   /** Returns the comma-separated list of covering (included) columns, or {@code null}. */
   public String getInclude() {
     return include;
+  }
+
+  /** Returns the partial/filtered index {@code WHERE} predicate, or {@code null}. */
+  public String getFilter() {
+    return filter;
   }
 
   /**

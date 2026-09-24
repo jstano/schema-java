@@ -211,12 +211,24 @@ public class SchemaWriter {
   }
 
   private void outputRelation(Relation relation) {
-    out.printf(
-        "      <relation src=\"%s\" table=\"%s\" column=\"%s\" type=\"%s\"/>\n",
-        relation.getFromColumnName(),
-        relation.getToTableName(),
-        relation.getToColumnName(),
-        relation.getType().toString().toLowerCase());
+    if (relation.isComposite()) {
+      out.printf(
+          "      <compositeRelation table=\"%s\" type=\"%s\">\n",
+          relation.getToTableName(), relation.getType().toString().toLowerCase());
+      for (var columnPair : relation.getColumnPairs()) {
+        out.printf(
+            "        <column src=\"%s\" name=\"%s\"/>\n",
+            columnPair.getFromColumnName(), columnPair.getToColumnName());
+      }
+      out.printf("      </compositeRelation>\n");
+    } else {
+      out.printf(
+          "      <relation src=\"%s\" table=\"%s\" column=\"%s\" type=\"%s\"/>\n",
+          relation.getFromColumnName(),
+          relation.getToTableName(),
+          relation.getToColumnName(),
+          relation.getType().toString().toLowerCase());
+    }
   }
 
   private void outputPrimaryKey(Key key) {

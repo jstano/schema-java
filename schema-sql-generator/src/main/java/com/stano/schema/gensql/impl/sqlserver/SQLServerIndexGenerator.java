@@ -27,6 +27,10 @@ class SQLServerIndexGenerator extends IndexGenerator {
       options.add(String.format("include (%s)", key.getInclude()));
     }
 
+    if (key.getFilter() != null && !key.getFilter().isEmpty()) {
+      options.add(String.format("where %s", key.getFilter()));
+    }
+
     if (key.isCompress()) {
       options.add("with (data_compression = page)");
     }

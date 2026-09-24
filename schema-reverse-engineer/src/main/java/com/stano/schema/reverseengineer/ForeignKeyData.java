@@ -1,6 +1,7 @@
 package com.stano.schema.reverseengineer;
 
 public record ForeignKeyData(
+    String fkName,
     String pkTableName,
     String pkColumnName,
     String fkTableName,

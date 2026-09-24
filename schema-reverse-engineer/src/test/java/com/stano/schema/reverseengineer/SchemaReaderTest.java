@@ -1,6 +1,8 @@
 package com.stano.schema.reverseengineer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +14,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -110,5 +113,99 @@ public class SchemaReaderTest {
         relationType,
         "FK with DELETE_RULE=NO_ACTION and UPDATE_RULE=CASCADE should map to DONOTHING (delete rule"
             + " wins)");
+  }
+
+  @Test
+  @DisplayName("groupForeignKeys passes single-column rows through as one relation per row")
+  void testGroupForeignKeysSingleColumn() {
+    var rows =
+        List.of(
+            new ForeignKeyData(
+                "fk_a",
+                "parent",
+                "id",
+                "child",
+                "parent_id",
+                1,
+                "importedNoAction",
+                "importedKeyCascade"));
+
+    var relations = SchemaReader.groupForeignKeys(rows);
+
+    assertEquals(1, relations.size());
+    assertFalse(relations.get(0).isComposite());
+    assertEquals("parent_id", relations.get(0).getFromColumnName());
+    assertEquals("id", relations.get(0).getToColumnName());
+    assertEquals(RelationType.CASCADE, relations.get(0).getType());
+  }
+
+  @Test
+  @DisplayName("groupForeignKeys folds multiple rows sharing an fkName into one composite relation")
+  void testGroupForeignKeysComposite() {
+    var rows =
+        List.of(
+            new ForeignKeyData(
+                "fk_assignment",
+                "Assignment",
+                "ID",
+                "Assignment",
+                "ParentAssignmentID",
+                1,
+                "importedNoAction",
+                "importedKeyCascade"),
+            new ForeignKeyData(
+                "fk_assignment",
+                "Assignment",
+                "PropertyID",
+                "Assignment",
+                "PropertyID",
+                2,
+                "importedNoAction",
+                "importedKeyCascade"));
+
+    var relations = SchemaReader.groupForeignKeys(rows);
+
+    assertEquals(1, relations.size());
+    assertTrue(relations.get(0).isComposite());
+    var columnPairs = relations.get(0).getColumnPairs();
+    assertEquals(2, columnPairs.size());
+    assertEquals("ParentAssignmentID", columnPairs.get(0).getFromColumnName());
+    assertEquals("ID", columnPairs.get(0).getToColumnName());
+    assertEquals("PropertyID", columnPairs.get(1).getFromColumnName());
+    assertEquals("PropertyID", columnPairs.get(1).getToColumnName());
+  }
+
+  @Test
+  @DisplayName("groupForeignKeys keeps rows from different constraints as separate relations")
+  void testGroupForeignKeysDifferentConstraints() {
+    var rows =
+        List.of(
+            new ForeignKeyData(
+                "fk_a",
+                "parent_a",
+                "id",
+                "child",
+                "a_id",
+                1,
+                "importedNoAction",
+                "importedKeyCascade"),
+            new ForeignKeyData(
+                "fk_b",
+                "parent_b",
+                "id",
+                "child",
+                "b_id",
+                1,
+                "importedNoAction",
+                "importedKeySetNull"));
+
+    var relations = SchemaReader.groupForeignKeys(rows);
+
+    assertEquals(2, relations.size());
+    assertFalse(relations.get(0).isComposite());
+    assertFalse(relations.get(1).isComposite());
+    assertEquals("parent_a", relations.get(0).getToTableName());
+    assertEquals("parent_b", relations.get(1).getToTableName());
+    assertEquals(RelationType.SETNULL, relations.get(1).getType());
   }
 }

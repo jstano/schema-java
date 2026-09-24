@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.ChangeSet;
 import com.stano.schema.diff.change.AddColumnChange;
+import com.stano.schema.diff.change.AddConstraintChange;
 import com.stano.schema.diff.change.AddFunctionChange;
 import com.stano.schema.diff.change.AddKeyChange;
 import com.stano.schema.diff.change.AddProcedureChange;
@@ -13,14 +14,19 @@ import com.stano.schema.diff.change.AddRelationChange;
 import com.stano.schema.diff.change.AddTableChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
+import com.stano.schema.diff.change.DropConstraintChange;
 import com.stano.schema.diff.change.DropFunctionChange;
+import com.stano.schema.diff.change.DropKeyChange;
 import com.stano.schema.diff.change.DropProcedureChange;
+import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGeneratorOptions;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
+import com.stano.schema.model.Constraint;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.EnumType;
 import com.stano.schema.model.EnumValue;
@@ -57,7 +63,7 @@ class PostgreSQLMigrationGeneratorTest {
     gen.generate();
 
     String sql = sw.toString();
-    assertTrue(sql.contains("CREATE TABLE users ()"));
+    assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS users ()"));
   }
 
   @Test
@@ -203,6 +209,29 @@ class PostgreSQLMigrationGeneratorTest {
   }
 
   @Test
+  @DisplayName("generates unique filtered index for a promoted unique+where index key")
+  void generatesUniqueFilteredIndex() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("parent_id"));
+    Key key =
+        new Key(KeyType.INDEX, cols, false, false, true, null, "parent_id is not null");
+    changeSet.addChange(new AddKeyChange("users", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("CREATE UNIQUE INDEX")),
+        () -> assertTrue(sql.contains("WHERE parent_id is not null")));
+  }
+
+  @Test
   @DisplayName("generates FOREIGN KEY for add-relation change")
   void generatesAddRelation() {
     ChangeSet changeSet = new ChangeSet();
@@ -220,6 +249,40 @@ class PostgreSQLMigrationGeneratorTest {
     assertAll(
         () -> assertTrue(sql.contains("FOREIGN KEY")),
         () -> assertTrue(sql.contains("ON DELETE CASCADE")));
+  }
+
+  @Test
+  @DisplayName("generates composite FOREIGN KEY listing all column pairs for add-relation change")
+  void generatesAddCompositeRelationListsAllColumnPairs() {
+    ChangeSet changeSet = new ChangeSet();
+    Relation rel =
+        Relation.composite(
+            "assignments",
+            "properties",
+            List.of(
+                new ColumnPair("parent_assignment_id", "id"),
+                new ColumnPair("property_id", "property_id")),
+            RelationType.CASCADE,
+            false);
+    changeSet.addChange(new AddRelationChange(rel, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () ->
+            assertTrue(
+                sql.contains("FOREIGN KEY (parent_assignment_id, property_id)"),
+                "expected both source columns listed, got: " + sql),
+        () ->
+            assertTrue(
+                sql.contains("REFERENCES properties(id, property_id)"),
+                "expected both referenced columns listed, got: " + sql));
   }
 
   @Test
@@ -257,7 +320,7 @@ class PostgreSQLMigrationGeneratorTest {
     gen.generate();
 
     String sql = sw.toString();
-    assertAll(() -> assertTrue(sql.contains("ALTER TABLE customer RENAME TO customers")));
+    assertAll(() -> assertTrue(sql.contains("ALTER TABLE IF EXISTS customer RENAME TO customers")));
   }
 
   @Test
@@ -386,10 +449,10 @@ class PostgreSQLMigrationGeneratorTest {
     assertAll(
         () -> assertTrue(sql.contains("-- TODO: possible rename?")),
         () -> assertTrue(sql.contains("RENAME COLUMN first_name TO full_name")),
-        () -> assertTrue(sql.contains("ALTER TABLE users DROP COLUMN first_name")));
+        () -> assertTrue(sql.contains("ALTER TABLE users DROP COLUMN IF EXISTS first_name")));
 
     int todoIdx = sql.indexOf("-- TODO:");
-    int dropIdx = sql.indexOf("ALTER TABLE users DROP COLUMN");
+    int dropIdx = sql.indexOf("ALTER TABLE users DROP COLUMN IF EXISTS");
     assertTrue(todoIdx < dropIdx, "TODO comment should appear before DROP COLUMN");
   }
 
@@ -408,5 +471,156 @@ class PostgreSQLMigrationGeneratorTest {
 
     String sql = sw.toString();
     assertTrue(sql.contains(";"));
+  }
+
+  @Test
+  @DisplayName("guards ADD PRIMARY KEY with a pg_constraint existence check")
+  void generatesAddPrimaryKeyIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("id"));
+    Key key = new Key(KeyType.PRIMARY, cols);
+    changeSet.addChange(new AddKeyChange("orders", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("DO $$"), "expected a guarded DO block, got: " + sql),
+        () -> assertTrue(sql.contains("FROM pg_constraint WHERE conname ="), "got: " + sql),
+        () -> assertTrue(sql.contains("ADD CONSTRAINT pk_orders PRIMARY KEY (id)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("guards ADD CONSTRAINT with a pg_constraint existence check")
+  void generatesAddConstraintIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(
+        new AddConstraintChange(
+            "orders", new Constraint("ck_orders_total", "total >= 0", DatabaseType.POSTGRESQL)));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("DO $$"), "expected a guarded DO block, got: " + sql),
+        () -> assertTrue(sql.contains("conname = 'ck_orders_total'"), "got: " + sql),
+        () ->
+            assertTrue(
+                sql.contains("ADD CONSTRAINT ck_orders_total CHECK (total >= 0)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("generates DROP CONSTRAINT IF EXISTS for drop-constraint change")
+  void generatesDropConstraintUsesIfExists() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(new DropConstraintChange("orders", "ck_orders_total"));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS ck_orders_total"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards ADD RELATION with a pg_constraint existence check")
+  void generatesAddRelationIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    Relation rel =
+        new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false);
+    changeSet.addChange(new AddRelationChange(rel, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("DO $$"), "expected a guarded DO block, got: " + sql),
+        () ->
+            assertTrue(
+                sql.contains("FOREIGN KEY (customer_id) REFERENCES customers(id)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("generates DROP CONSTRAINT IF EXISTS for drop-relation change")
+  void generatesDropRelationUsesIfExists() {
+    ChangeSet changeSet = new ChangeSet();
+    Relation rel =
+        new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false);
+    changeSet.addChange(new DropRelationChange(rel, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS fk_orders1"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("generates DROP CONSTRAINT IF EXISTS for drop-primary-key change")
+  void generatesDropPrimaryKeyUsesIfExists() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("id"));
+    Key key = new Key(KeyType.PRIMARY, cols);
+    changeSet.addChange(new DropKeyChange("orders", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS pk_orders"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards RENAME COLUMN with an information_schema existence check")
+  void generatesRenameColumnIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(new RenameColumnChange("users", "first_name", "given_name"));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.POSTGRESQL);
+    PostgreSQLMigrationGenerator gen = new PostgreSQLMigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("DO $$"), "expected a guarded DO block, got: " + sql),
+        () ->
+            assertTrue(
+                sql.contains(
+                    "FROM information_schema.columns WHERE table_name = 'users' AND column_name ="
+                        + " 'first_name'"),
+                "got: " + sql),
+        () -> assertTrue(sql.contains("RENAME COLUMN first_name TO given_name"), "got: " + sql));
   }
 }

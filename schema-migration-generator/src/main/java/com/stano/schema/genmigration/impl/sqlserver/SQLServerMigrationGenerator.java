@@ -25,10 +25,12 @@ import com.stano.schema.gensql.impl.common.ColumnTypeMapper;
 import com.stano.schema.gensql.impl.sqlserver.SQLServerColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.Naming;
 import java.io.PrintWriter;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class SQLServerMigrationGenerator extends MigrationGenerator {
   private final ColumnTypeMapper mapper;
@@ -41,7 +43,12 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateAddTable(AddTableChange change) {
     PrintWriter w = options.getWriter();
-    w.println("CREATE TABLE " + change.getTableName() + " ()");
+    w.println(
+        "IF OBJECT_ID('"
+            + change.getTableName()
+            + "', 'U') IS NULL CREATE TABLE "
+            + change.getTableName()
+            + " ()");
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -57,7 +64,16 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateRenameTable(RenameTableChange change) {
     PrintWriter w = options.getWriter();
-    w.println("EXEC sp_rename '" + change.getOldName() + "', '" + change.getNewName() + "'");
+    w.println(
+        "IF OBJECT_ID('"
+            + change.getOldName()
+            + "', 'U') IS NOT NULL AND OBJECT_ID('"
+            + change.getNewName()
+            + "', 'U') IS NULL EXEC sp_rename '"
+            + change.getOldName()
+            + "', '"
+            + change.getNewName()
+            + "'");
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -66,7 +82,15 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   protected void generateRenameColumn(RenameColumnChange change) {
     PrintWriter w = options.getWriter();
     w.println(
-        "EXEC sp_rename '"
+        "IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('"
+            + change.getTableName()
+            + "') AND name = '"
+            + change.getOldName()
+            + "') AND NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('"
+            + change.getTableName()
+            + "') AND name = '"
+            + change.getNewName()
+            + "') EXEC sp_rename '"
             + change.getTableName()
             + "."
             + change.getOldName()
@@ -82,7 +106,11 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     PrintWriter w = options.getWriter();
     Column col = change.getColumn();
     StringBuilder sb = new StringBuilder();
-    sb.append("ALTER TABLE ")
+    sb.append("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('")
+        .append(change.getTableName())
+        .append("') AND name = '")
+        .append(col.getName())
+        .append("') ALTER TABLE ")
         .append(change.getTableName())
         .append(" ADD ")
         .append(col.getName())
@@ -110,11 +138,14 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
 
     String checkSql = getCheckConstraintSql(col);
     if (checkSql != null) {
+      String constraintName = getCheckConstraintName(change.getTableName(), col.getName());
       w.println(
-          "ALTER TABLE "
+          "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = '"
+              + constraintName
+              + "') ALTER TABLE "
               + change.getTableName()
               + " ADD CONSTRAINT "
-              + getCheckConstraintName(change.getTableName(), col.getName())
+              + constraintName
               + " "
               + checkSql);
       w.print(options.getStatementSeparator());
@@ -125,7 +156,15 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateDropColumn(DropColumnChange change) {
     PrintWriter w = options.getWriter();
-    w.println("ALTER TABLE " + change.getTableName() + " DROP COLUMN " + change.getColumnName());
+    w.println(
+        "IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('"
+            + change.getTableName()
+            + "') AND name = '"
+            + change.getColumnName()
+            + "') ALTER TABLE "
+            + change.getTableName()
+            + " DROP COLUMN "
+            + change.getColumnName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -176,34 +215,59 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     PrintWriter w = options.getWriter();
     switch (change.getKey().getType()) {
       case PRIMARY:
-        w.println(
-            "ALTER TABLE "
-                + change.getTableName()
-                + " ADD PRIMARY KEY ("
-                + change.getKey().getColumnsAsString()
-                + ")");
+        {
+          String pkName = Naming.primaryKeyName(DatabaseType.SQL_SERVER, change.getTableName());
+          w.println(
+              "IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = '"
+                  + pkName
+                  + "' AND parent_object_id = OBJECT_ID('"
+                  + change.getTableName()
+                  + "')) ALTER TABLE "
+                  + change.getTableName()
+                  + " ADD CONSTRAINT "
+                  + pkName
+                  + " PRIMARY KEY ("
+                  + change.getKey().getColumnsAsString()
+                  + ")");
+        }
         break;
       case UNIQUE:
-        w.println(
-            "CREATE UNIQUE INDEX "
-                + Naming.uniqueKeyName(
-                    DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal())
-                + " ON "
-                + change.getTableName()
-                + " ("
-                + change.getKey().getColumnsAsString()
-                + ")");
+        {
+          String constraintName =
+              Naming.uniqueKeyName(
+                  DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal());
+          w.println(
+              "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '"
+                  + constraintName
+                  + "') CREATE UNIQUE INDEX "
+                  + constraintName
+                  + " ON "
+                  + change.getTableName()
+                  + " ("
+                  + change.getKey().getColumnsAsString()
+                  + ")");
+        }
         break;
       case INDEX:
-        w.println(
-            "CREATE INDEX "
-                + Naming.indexName(
-                    DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal())
-                + " ON "
-                + change.getTableName()
-                + " ("
-                + change.getKey().getColumnsAsString()
-                + ")");
+        {
+          String indexName =
+              Naming.indexName(DatabaseType.SQL_SERVER, change.getTableName(), change.getOrdinal());
+          w.println(
+              "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '"
+                  + indexName
+                  + "') CREATE "
+                  + (change.getKey().isUnique() ? "UNIQUE " : "")
+                  + "INDEX "
+                  + indexName
+                  + " ON "
+                  + change.getTableName()
+                  + " ("
+                  + change.getKey().getColumnsAsString()
+                  + ")"
+                  + (change.getKey().getFilter() != null
+                      ? " WHERE " + change.getKey().getFilter()
+                      : ""));
+        }
         break;
     }
     w.print(options.getStatementSeparator());
@@ -215,11 +279,18 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     PrintWriter w = options.getWriter();
     switch (change.getKey().getType()) {
       case PRIMARY:
-        w.println(
-            "ALTER TABLE "
-                + change.getTableName()
-                + " DROP CONSTRAINT "
-                + Naming.primaryKeyName(DatabaseType.SQL_SERVER, change.getTableName()));
+        {
+          String pkName = Naming.primaryKeyName(DatabaseType.SQL_SERVER, change.getTableName());
+          w.println(
+              "IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = '"
+                  + pkName
+                  + "' AND parent_object_id = OBJECT_ID('"
+                  + change.getTableName()
+                  + "')) ALTER TABLE "
+                  + change.getTableName()
+                  + " DROP CONSTRAINT "
+                  + pkName);
+        }
         break;
       case UNIQUE:
         {
@@ -257,7 +328,9 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   protected void generateAddConstraint(AddConstraintChange change) {
     PrintWriter w = options.getWriter();
     w.println(
-        "ALTER TABLE "
+        "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = '"
+            + change.getConstraint().getName()
+            + "') ALTER TABLE "
             + change.getTableName()
             + " ADD CONSTRAINT "
             + change.getConstraint().getName()
@@ -272,7 +345,14 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   protected void generateDropConstraint(DropConstraintChange change) {
     PrintWriter w = options.getWriter();
     w.println(
-        "ALTER TABLE " + change.getTableName() + " DROP CONSTRAINT " + change.getConstraintName());
+        "IF EXISTS (SELECT 1 FROM sys.objects WHERE name = '"
+            + change.getConstraintName()
+            + "' AND parent_object_id = OBJECT_ID('"
+            + change.getTableName()
+            + "')) ALTER TABLE "
+            + change.getTableName()
+            + " DROP CONSTRAINT "
+            + change.getConstraintName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -288,16 +368,22 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
             ? " ON DELETE CASCADE"
             : "";
     w.println(
-        "ALTER TABLE "
+        "IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = '"
+            + fkName
+            + "') ALTER TABLE "
             + change.getRelation().getFromTableName()
             + " ADD CONSTRAINT "
             + fkName
             + " FOREIGN KEY ("
-            + change.getRelation().getFromColumnName()
+            + change.getRelation().getColumnPairs().stream()
+                .map(ColumnPair::getFromColumnName)
+                .collect(Collectors.joining(", "))
             + ") REFERENCES "
             + change.getRelation().getToTableName()
             + "("
-            + change.getRelation().getToColumnName()
+            + change.getRelation().getColumnPairs().stream()
+                .map(ColumnPair::getToColumnName)
+                .collect(Collectors.joining(", "))
             + ")"
             + onDelete);
     w.print(options.getStatementSeparator());
@@ -311,7 +397,12 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
         Naming.foreignKeyName(
             DatabaseType.SQL_SERVER, change.getRelation().getFromTableName(), change.getOrdinal());
     w.println(
-        "ALTER TABLE " + change.getRelation().getFromTableName() + " DROP CONSTRAINT " + fkName);
+        "IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = '"
+            + fkName
+            + "') ALTER TABLE "
+            + change.getRelation().getFromTableName()
+            + " DROP CONSTRAINT "
+            + fkName);
     w.print(options.getStatementSeparator());
     w.println();
   }

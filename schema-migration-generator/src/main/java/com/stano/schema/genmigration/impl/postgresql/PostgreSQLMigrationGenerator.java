@@ -25,10 +25,12 @@ import com.stano.schema.gensql.impl.common.ColumnTypeMapper;
 import com.stano.schema.gensql.impl.postgresql.PostgreSQLColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.Naming;
 import java.io.PrintWriter;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class PostgreSQLMigrationGenerator extends MigrationGenerator {
   private final ColumnTypeMapper mapper;
@@ -41,7 +43,7 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateAddTable(AddTableChange change) {
     PrintWriter w = options.getWriter();
-    w.println("CREATE TABLE " + change.getTableName() + " ()");
+    w.println("CREATE TABLE IF NOT EXISTS " + change.getTableName() + " ()");
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -57,7 +59,7 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateRenameTable(RenameTableChange change) {
     PrintWriter w = options.getWriter();
-    w.println("ALTER TABLE " + change.getOldName() + " RENAME TO " + change.getNewName());
+    w.println("ALTER TABLE IF EXISTS " + change.getOldName() + " RENAME TO " + change.getNewName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -65,13 +67,24 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateRenameColumn(RenameColumnChange change) {
     PrintWriter w = options.getWriter();
+    w.println("DO $$");
+    w.println("BEGIN");
     w.println(
-        "ALTER TABLE "
+        "  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '"
+            + change.getTableName()
+            + "' AND column_name = '"
+            + change.getOldName()
+            + "') THEN");
+    w.println(
+        "    ALTER TABLE "
             + change.getTableName()
             + " RENAME COLUMN "
             + change.getOldName()
             + " TO "
-            + change.getNewName());
+            + change.getNewName()
+            + ";");
+    w.println("  END IF;");
+    w.println("END $$");
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -83,7 +96,7 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
     StringBuilder sb = new StringBuilder();
     sb.append("ALTER TABLE ")
         .append(change.getTableName())
-        .append(" ADD COLUMN ")
+        .append(" ADD COLUMN IF NOT EXISTS ")
         .append(col.getName())
         .append(" ")
         .append(mapper.toSqlType(col));
@@ -107,22 +120,29 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
 
     String checkSql = getCheckConstraintSql(col);
     if (checkSql != null) {
-      w.println(
+      String constraintName = getCheckConstraintName(change.getTableName(), col.getName());
+      writeGuardedAddConstraint(
+          w,
+          change.getTableName(),
+          constraintName,
           "ALTER TABLE "
               + change.getTableName()
               + " ADD CONSTRAINT "
-              + getCheckConstraintName(change.getTableName(), col.getName())
+              + constraintName
               + " "
-              + checkSql);
-      w.print(options.getStatementSeparator());
-      w.println();
+              + checkSql
+              + ";");
     }
   }
 
   @Override
   protected void generateDropColumn(DropColumnChange change) {
     PrintWriter w = options.getWriter();
-    w.println("ALTER TABLE " + change.getTableName() + " DROP COLUMN " + change.getColumnName());
+    w.println(
+        "ALTER TABLE "
+            + change.getTableName()
+            + " DROP COLUMN IF EXISTS "
+            + change.getColumnName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -181,16 +201,24 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
     PrintWriter w = options.getWriter();
     switch (change.getKey().getType()) {
       case PRIMARY:
-        w.println(
-            "ALTER TABLE "
-                + change.getTableName()
-                + " ADD PRIMARY KEY ("
-                + change.getKey().getColumnsAsString()
-                + ")");
+        {
+          String pkName = Naming.primaryKeyName(DatabaseType.POSTGRESQL, change.getTableName());
+          writeGuardedAddConstraint(
+              w,
+              change.getTableName(),
+              pkName,
+              "ALTER TABLE "
+                  + change.getTableName()
+                  + " ADD CONSTRAINT "
+                  + pkName
+                  + " PRIMARY KEY ("
+                  + change.getKey().getColumnsAsString()
+                  + ");");
+        }
         break;
       case UNIQUE:
         w.println(
-            "CREATE UNIQUE INDEX "
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
                 + Naming.uniqueKeyName(
                     DatabaseType.POSTGRESQL, change.getTableName(), change.getOrdinal())
                 + " ON "
@@ -198,21 +226,28 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
                 + " ("
                 + change.getKey().getColumnsAsString()
                 + ")");
+        w.print(options.getStatementSeparator());
+        w.println();
         break;
       case INDEX:
         w.println(
-            "CREATE INDEX "
+            "CREATE "
+                + (change.getKey().isUnique() ? "UNIQUE " : "")
+                + "INDEX IF NOT EXISTS "
                 + Naming.indexName(
                     DatabaseType.POSTGRESQL, change.getTableName(), change.getOrdinal())
                 + " ON "
                 + change.getTableName()
                 + " ("
                 + change.getKey().getColumnsAsString()
-                + ")");
+                + ")"
+                + (change.getKey().getFilter() != null
+                    ? " WHERE " + change.getKey().getFilter()
+                    : ""));
+        w.print(options.getStatementSeparator());
+        w.println();
         break;
     }
-    w.print(options.getStatementSeparator());
-    w.println();
   }
 
   @Override
@@ -223,7 +258,7 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
         w.println(
             "ALTER TABLE "
                 + change.getTableName()
-                + " DROP CONSTRAINT "
+                + " DROP CONSTRAINT IF EXISTS "
                 + Naming.primaryKeyName(DatabaseType.POSTGRESQL, change.getTableName()));
         break;
       case UNIQUE:
@@ -246,23 +281,27 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateAddConstraint(AddConstraintChange change) {
     PrintWriter w = options.getWriter();
-    w.println(
+    writeGuardedAddConstraint(
+        w,
+        change.getTableName(),
+        change.getConstraint().getName(),
         "ALTER TABLE "
             + change.getTableName()
             + " ADD CONSTRAINT "
             + change.getConstraint().getName()
             + " CHECK ("
             + change.getConstraint().getSql()
-            + ")");
-    w.print(options.getStatementSeparator());
-    w.println();
+            + ");");
   }
 
   @Override
   protected void generateDropConstraint(DropConstraintChange change) {
     PrintWriter w = options.getWriter();
     w.println(
-        "ALTER TABLE " + change.getTableName() + " DROP CONSTRAINT " + change.getConstraintName());
+        "ALTER TABLE "
+            + change.getTableName()
+            + " DROP CONSTRAINT IF EXISTS "
+            + change.getConstraintName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -277,21 +316,27 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
         change.getRelation().getType() == com.stano.schema.model.RelationType.CASCADE
             ? " ON DELETE CASCADE"
             : "";
-    w.println(
+    writeGuardedAddConstraint(
+        w,
+        change.getRelation().getFromTableName(),
+        fkName,
         "ALTER TABLE "
             + change.getRelation().getFromTableName()
             + " ADD CONSTRAINT "
             + fkName
             + " FOREIGN KEY ("
-            + change.getRelation().getFromColumnName()
+            + change.getRelation().getColumnPairs().stream()
+                .map(ColumnPair::getFromColumnName)
+                .collect(Collectors.joining(", "))
             + ") REFERENCES "
             + change.getRelation().getToTableName()
             + "("
-            + change.getRelation().getToColumnName()
+            + change.getRelation().getColumnPairs().stream()
+                .map(ColumnPair::getToColumnName)
+                .collect(Collectors.joining(", "))
             + ")"
-            + onDelete);
-    w.print(options.getStatementSeparator());
-    w.println();
+            + onDelete
+            + ";");
   }
 
   @Override
@@ -301,7 +346,32 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
         Naming.foreignKeyName(
             DatabaseType.POSTGRESQL, change.getRelation().getFromTableName(), change.getOrdinal());
     w.println(
-        "ALTER TABLE " + change.getRelation().getFromTableName() + " DROP CONSTRAINT " + fkName);
+        "ALTER TABLE "
+            + change.getRelation().getFromTableName()
+            + " DROP CONSTRAINT IF EXISTS "
+            + fkName);
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  /**
+   * Postgres has no {@code ADD CONSTRAINT IF NOT EXISTS} (for CHECK, PRIMARY KEY, or FOREIGN KEY
+   * constraints), so idempotency has to be expressed as a {@code pg_constraint} existence check
+   * wrapped in a {@code DO} block instead of a plain clause.
+   */
+  private void writeGuardedAddConstraint(
+      PrintWriter w, String tableName, String constraintName, String addConstraintSql) {
+    w.println("DO $$");
+    w.println("BEGIN");
+    w.println(
+        "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '"
+            + constraintName
+            + "' AND conrelid = '"
+            + tableName
+            + "'::regclass) THEN");
+    w.println("    " + addConstraintSql);
+    w.println("  END IF;");
+    w.println("END $$");
     w.print(options.getStatementSeparator());
     w.println();
   }

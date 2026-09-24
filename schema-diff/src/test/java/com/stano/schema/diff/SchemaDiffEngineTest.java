@@ -16,6 +16,7 @@ import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Constraint;
 import com.stano.schema.model.DatabaseType;
@@ -543,6 +544,89 @@ class SchemaDiffEngineTest {
   }
 
   @Test
+  @DisplayName("no composite relation change when column pairs match")
+  void noCompositeRelationChangeWhenColumnPairsMatch() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "assignment", null, null, false);
+    oldTable
+        .getRelations()
+        .add(
+            Relation.composite(
+                "assignment",
+                "assignment",
+                List.of(
+                    new ColumnPair("parent_id", "id"),
+                    new ColumnPair("property_id", "property_id")),
+                RelationType.CASCADE,
+                false));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "assignment", null, null, false);
+    newTable
+        .getRelations()
+        .add(
+            Relation.composite(
+                "assignment",
+                "assignment",
+                List.of(
+                    new ColumnPair("parent_id", "id"),
+                    new ColumnPair("property_id", "property_id")),
+                RelationType.CASCADE,
+                false));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(changeSet.isEmpty());
+  }
+
+  @Test
+  @DisplayName("detects composite relation column order change")
+  void detectsCompositeRelationColumnOrderChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "assignment", null, null, false);
+    oldTable
+        .getRelations()
+        .add(
+            Relation.composite(
+                "assignment",
+                "assignment",
+                List.of(
+                    new ColumnPair("parent_id", "id"),
+                    new ColumnPair("property_id", "property_id")),
+                RelationType.CASCADE,
+                false));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "assignment", null, null, false);
+    newTable
+        .getRelations()
+        .add(
+            Relation.composite(
+                "assignment",
+                "assignment",
+                List.of(
+                    new ColumnPair("property_id", "property_id"),
+                    new ColumnPair("parent_id", "id")),
+                RelationType.CASCADE,
+                false));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(c -> c instanceof com.stano.schema.diff.change.DropRelationChange));
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(c -> c instanceof com.stano.schema.diff.change.AddRelationChange));
+  }
+
+  @Test
   @DisplayName("detects key uniqueness change")
   void detectsKeyUniquenessChange() {
     Schema oldSchema = new Schema(TEST_URL);
@@ -559,6 +643,38 @@ class SchemaDiffEngineTest {
     List<KeyColumn> newCols = new ArrayList<>();
     newCols.add(new KeyColumn("email"));
     newTable.getIndexes().add(new Key(KeyType.INDEX, newCols, false, false, true, null));
+    newSchema.addTable(newTable);
+
+    SchemaDiffEngine engine = new SchemaDiffEngine();
+    ChangeSet changeSet = engine.diff(oldSchema, newSchema);
+
+    assertTrue(changeSet.getChanges().stream().anyMatch(c -> c instanceof DropKeyChange));
+    assertTrue(
+        changeSet.getChanges().stream()
+            .anyMatch(c -> c instanceof com.stano.schema.diff.change.AddKeyChange));
+  }
+
+  @Test
+  @DisplayName("detects key filter change")
+  void detectsKeyFilterChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Table oldTable = new Table(oldSchema, "s", "users", null, null, false);
+    oldTable.getColumns().add(new Column("email", ColumnType.VARCHAR, 255, false));
+    List<KeyColumn> oldCols = new ArrayList<>();
+    oldCols.add(new KeyColumn("email"));
+    oldTable
+        .getIndexes()
+        .add(new Key(KeyType.INDEX, oldCols, false, false, true, null, "email is not null"));
+    oldSchema.addTable(oldTable);
+
+    Schema newSchema = new Schema(TEST_URL);
+    Table newTable = new Table(newSchema, "s", "users", null, null, false);
+    newTable.getColumns().add(new Column("email", ColumnType.VARCHAR, 255, false));
+    List<KeyColumn> newCols = new ArrayList<>();
+    newCols.add(new KeyColumn("email"));
+    newTable
+        .getIndexes()
+        .add(new Key(KeyType.INDEX, newCols, false, false, true, null, "email is not null and email <> ''"));
     newSchema.addTable(newTable);
 
     SchemaDiffEngine engine = new SchemaDiffEngine();

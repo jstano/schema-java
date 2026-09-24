@@ -91,8 +91,8 @@ class MigrationGeneratorIntegrationTest {
     genMigration.generateMigrationSQL(DatabaseType.POSTGRESQL, changeSet, pw);
     String sql = sw.toString();
 
-    assertTrue(sql.contains("CREATE TABLE users"));
-    assertTrue(sql.contains("CREATE TABLE posts"));
-    assertTrue(sql.contains("CREATE TABLE comments"));
+    assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS users"));
+    assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS posts"));
+    assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS comments"));
   }
 }

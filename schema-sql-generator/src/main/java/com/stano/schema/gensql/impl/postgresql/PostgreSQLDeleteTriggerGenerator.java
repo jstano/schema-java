@@ -14,6 +14,7 @@ import com.stano.schema.model.Table;
 import com.stano.schema.model.Trigger;
 import com.stano.schema.model.TriggerType;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
 
@@ -34,7 +35,7 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
       return;
     }
 
-    outputDeleteFunction(table, relations, deleteFunctionName, column);
+    outputDeleteFunction(table, relations, deleteFunctionName);
 
     outputDeleteTrigger(table, deleteTriggerName, deleteFunctionName);
   }
@@ -44,8 +45,15 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
     return table.getSchemaName() + "." + functionName;
   }
 
-  private void outputDeleteFunction(
-      Table table, List<Relation> relations, String delFunctionName, Column column) {
+  /** Joins every column pair of a (reverse) relation into an {@code OLD}-matching where clause. */
+  private String oldMatchWhereClause(Relation relation) {
+
+    return relation.getColumnPairs().stream()
+        .map(pair -> pair.getToColumnName() + " = OLD." + pair.getFromColumnName())
+        .collect(Collectors.joining(" and "));
+  }
+
+  private void outputDeleteFunction(Table table, List<Relation> relations, String delFunctionName) {
 
     sqlWriter.println(
         String.format("/* %s */", getFullyQualifiedFunctionName(table, delFunctionName)));
@@ -56,7 +64,7 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
     sqlWriter.println("begin");
 
     if (foreignKeyMode == ForeignKeyMode.TRIGGERS) {
-      outputDeleteEnforceStatements(relations, column);
+      outputDeleteEnforceStatements(relations);
 
       outputDeleteSetNullStatements(relations);
 
@@ -96,7 +104,7 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
     sqlWriter.println();
   }
 
-  private void outputDeleteEnforceStatements(List<Relation> relations, Column column) {
+  private void outputDeleteEnforceStatements(List<Relation> relations) {
 
     relations.stream()
         .filter(relation -> relation.getType() == RelationType.ENFORCE)
@@ -106,9 +114,7 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
                   "   if (select count(*) from "
                       + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
                       + " where "
-                      + relation.getToColumnName()
-                      + " = OLD."
-                      + column.getName()
+                      + oldMatchWhereClause(relation)
                       + ") > 0 then");
               sqlWriter.println(
                   "      raise exception 'The row in "
@@ -127,15 +133,17 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
         .filter(relation -> relation.getType() == RelationType.SETNULL)
         .forEach(
             relation -> {
+              String setClause =
+                  relation.getColumnPairs().stream()
+                      .map(pair -> pair.getToColumnName() + " = null")
+                      .collect(Collectors.joining(", "));
               sqlWriter.println(
                   "   update "
                       + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
                       + " set "
-                      + relation.getToColumnName()
-                      + " = null where "
-                      + relation.getToColumnName()
-                      + " = OLD."
-                      + relation.getFromColumnName()
+                      + setClause
+                      + " where "
+                      + oldMatchWhereClause(relation)
                       + ";");
               sqlWriter.println();
             });
@@ -151,9 +159,7 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
                   "   delete from "
                       + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
                       + " where "
-                      + relation.getToColumnName()
-                      + " = OLD."
-                      + relation.getFromColumnName()
+                      + oldMatchWhereClause(relation)
                       + ";");
               sqlWriter.println();
             });

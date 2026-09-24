@@ -18,6 +18,7 @@ import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.Constraint;
 import com.stano.schema.model.Function;
 import com.stano.schema.model.Key;
@@ -449,6 +450,7 @@ public class SchemaDiffEngine {
         || a.isUnique() != b.isUnique()
         || a.isCluster() != b.isCluster()
         || !java.util.Objects.equals(a.getInclude(), b.getInclude())
+        || !java.util.Objects.equals(a.getFilter(), b.getFilter())
         || a.getColumns().size() != b.getColumns().size()) {
       return false;
     }
@@ -475,14 +477,28 @@ public class SchemaDiffEngine {
   private boolean containsRelation(List<Relation> relations, Relation target) {
     for (Relation relation : relations) {
       if (relation.getFromTableName().equals(target.getFromTableName())
-          && relation.getFromColumnName().equals(target.getFromColumnName())
           && relation.getToTableName().equals(target.getToTableName())
-          && relation.getToColumnName().equals(target.getToColumnName())
-          && relation.getType() == target.getType()) {
+          && relation.getType() == target.getType()
+          && columnPairsEqual(relation.getColumnPairs(), target.getColumnPairs())) {
         return true;
       }
     }
     return false;
+  }
+
+  private boolean columnPairsEqual(List<ColumnPair> a, List<ColumnPair> b) {
+    if (a.size() != b.size()) {
+      return false;
+    }
+    for (int i = 0; i < a.size(); i++) {
+      ColumnPair pa = a.get(i);
+      ColumnPair pb = b.get(i);
+      if (!pa.getFromColumnName().equals(pb.getFromColumnName())
+          || !pa.getToColumnName().equals(pb.getToColumnName())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private boolean columnsEqual(Column col1, Column col2) {

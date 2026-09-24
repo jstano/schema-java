@@ -39,8 +39,9 @@ class SchemaParserTest {
     Table longSequenceTesterTable = schema.getTable("LongSequenceTesterTable");
     Table kbiTable = schema.getTable("KBI");
     Table unitTable = schema.getTable("Unit");
+    Table assignmentTable = schema.getTable("Assignment");
 
-    assertEquals(schema.getTables().size(), 9);
+    assertEquals(schema.getTables().size(), 10);
     assertEquals(
         schema.getForeignKeyMode(),
         ForeignKeyMode.RELATIONS,
@@ -53,6 +54,7 @@ class SchemaParserTest {
     assertEquals(longSequenceTesterTable.getColumns().get(0).getName(), "longsequence");
     assertEquals(longSequenceTesterTable.getColumns().get(0).getType(), ColumnType.LONGSEQUENCE);
     verifyKBITable(kbiTable);
+    verifyAssignmentTable(assignmentTable);
 
     assertEquals(schema.getViews().size(), 4);
     assertEquals(schema.getViews().get(0).getSchemaName(), "test");
@@ -434,5 +436,27 @@ class SchemaParserTest {
     assertEquals(kbiTable.getRelations().get(2).getToTableName(), "MasterKBICode");
     assertEquals(kbiTable.getRelations().get(2).getToColumnName(), "ID");
     assertEquals(kbiTable.getRelations().get(2).getType(), RelationType.SETNULL);
+  }
+
+  private void verifyAssignmentTable(Table assignmentTable) {
+    assertEquals(assignmentTable.getRelations().size(), 2);
+    assertEquals(assignmentTable.getRelations().get(0).getFromTableName(), "Assignment");
+    assertEquals(assignmentTable.getRelations().get(0).getFromColumnName(), "PropertyID");
+    assertEquals(assignmentTable.getRelations().get(0).getToTableName(), "Property");
+    assertEquals(assignmentTable.getRelations().get(0).getToColumnName(), "ID");
+    assertEquals(assignmentTable.getRelations().get(0).getType(), RelationType.CASCADE);
+    assertFalse(assignmentTable.getRelations().get(0).isComposite());
+
+    var compositeRelation = assignmentTable.getRelations().get(1);
+    assertEquals(compositeRelation.getFromTableName(), "Assignment");
+    assertEquals(compositeRelation.getToTableName(), "Assignment");
+    assertEquals(compositeRelation.getType(), RelationType.CASCADE);
+    assertTrue(compositeRelation.isComposite());
+    assertEquals(compositeRelation.getColumnPairs().size(), 2);
+    assertEquals(
+        compositeRelation.getColumnPairs().get(0).getFromColumnName(), "ParentAssignmentID");
+    assertEquals(compositeRelation.getColumnPairs().get(0).getToColumnName(), "ID");
+    assertEquals(compositeRelation.getColumnPairs().get(1).getFromColumnName(), "PropertyID");
+    assertEquals(compositeRelation.getColumnPairs().get(1).getToColumnName(), "PropertyID");
   }
 }

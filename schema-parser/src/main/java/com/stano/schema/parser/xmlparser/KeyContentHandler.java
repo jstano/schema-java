@@ -19,6 +19,7 @@ public class KeyContentHandler extends AbstractContentHandler {
   private boolean compress;
   private boolean unique;
   private String include;
+  private String filter;
   private List<KeyColumn> columns = new ArrayList<>();
 
   protected KeyContentHandler(Schema schema, Table table, TableContentHandler tableContentHandler) {
@@ -37,6 +38,7 @@ public class KeyContentHandler extends AbstractContentHandler {
       compress = Boolean.parseBoolean(atts.getValue("compress"));
       unique = Boolean.parseBoolean(atts.getValue("unique"));
       include = atts.getValue("include");
+      filter = atts.getValue("where");
       columns.clear();
     } else if (localName.equals("column")) {
       columns.add(new KeyColumn(atts.getValue("name")));
@@ -47,10 +49,29 @@ public class KeyContentHandler extends AbstractContentHandler {
   public void endElement(String namespaceURI, String localName, String qName) throws SAXException {
     switch (localName) {
       case "keys" -> tableContentHandler.contentHandler = null;
-      case "primary", "unique" ->
+      case "primary" -> {
+        if (filter != null) {
+          throw new SAXException("<primary> does not support a 'where' predicate");
+        }
+        table.getKeys().add(new Key(keyType, columns, cluster, compress, true, include));
+      }
+      case "unique" -> {
+        if (filter != null && cluster) {
+          throw new SAXException(
+              "<unique> with a 'where' predicate cannot be clustered (cluster=\"true\")");
+        }
+        if (filter != null) {
+          table
+              .getIndexes()
+              .add(new Key(KeyType.INDEX, columns, false, compress, true, include, filter));
+        } else {
           table.getKeys().add(new Key(keyType, columns, cluster, compress, true, include));
+        }
+      }
       case "index" ->
-          table.getIndexes().add(new Key(keyType, columns, false, compress, unique, include));
+          table
+              .getIndexes()
+              .add(new Key(keyType, columns, false, compress, unique, include, filter));
     }
   }
 }

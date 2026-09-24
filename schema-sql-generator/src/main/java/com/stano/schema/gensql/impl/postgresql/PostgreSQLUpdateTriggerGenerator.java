@@ -5,6 +5,7 @@ import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.model.Aggregation;
 import com.stano.schema.model.AggregationColumn;
 import com.stano.schema.model.AggregationGroup;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
 import com.stano.schema.model.Relation;
@@ -50,57 +51,31 @@ public class PostgreSQLUpdateTriggerGenerator extends BaseGenerator {
 
     if (foreignKeyMode == ForeignKeyMode.TRIGGERS) {
       for (Relation relation : relations) {
-        if (relation.getType() == RelationType.ENFORCE) {
-          sqlWriter.println("   if new." + relation.getFromColumnName() + " is not null then");
+        if (relation.getType() == RelationType.ENFORCE
+            || relation.getType() == RelationType.SETNULL
+            || relation.getType() == RelationType.CASCADE) {
+          String notNullClause =
+              relation.getColumnPairs().stream()
+                  .map(pair -> "new." + pair.getFromColumnName() + " is not null")
+                  .collect(Collectors.joining(" and "));
+          String newMatchClause =
+              relation.getColumnPairs().stream()
+                  .map(pair -> pair.getToColumnName() + " = new." + pair.getFromColumnName())
+                  .collect(Collectors.joining(" and "));
+          String columnList =
+              relation.getColumnPairs().stream()
+                  .map(ColumnPair::getFromColumnName)
+                  .collect(Collectors.joining(", "));
+          sqlWriter.println("   if " + notNullClause + " then");
           sqlWriter.println(
               "      if (select count(*) from "
                   + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
                   + " where "
-                  + relation.getToColumnName()
-                  + " = new."
-                  + relation.getFromColumnName()
+                  + newMatchClause
                   + ") = 0 then");
           sqlWriter.println(
               "         raise exception 'The value of "
-                  + relation.getFromColumnName()
-                  + " was not found in the "
-                  + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                  + " table.';");
-          sqlWriter.println("      end if;");
-          sqlWriter.println("   end if;");
-          sqlWriter.println();
-        } else if (relation.getType() == RelationType.SETNULL) {
-          sqlWriter.println("   if new." + relation.getFromColumnName() + " is not null then");
-          sqlWriter.println(
-              "      if (select count(*) from "
-                  + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                  + " where "
-                  + relation.getToColumnName()
-                  + " = new."
-                  + relation.getFromColumnName()
-                  + ") = 0 then");
-          sqlWriter.println(
-              "         raise exception 'The value of "
-                  + relation.getFromColumnName()
-                  + " was not found in the "
-                  + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                  + " table.';");
-          sqlWriter.println("      end if;");
-          sqlWriter.println("   end if;");
-          sqlWriter.println();
-        } else if (relation.getType() == RelationType.CASCADE) {
-          sqlWriter.println("   if new." + relation.getFromColumnName() + " is not null then");
-          sqlWriter.println(
-              "      if (select count(*) from "
-                  + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                  + " where "
-                  + relation.getToColumnName()
-                  + " = new."
-                  + relation.getFromColumnName()
-                  + ") = 0 then");
-          sqlWriter.println(
-              "         raise exception 'The value of "
-                  + relation.getFromColumnName()
+                  + columnList
                   + " was not found in the "
                   + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
                   + " table.';");

@@ -5,24 +5,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.ChangeSet;
 import com.stano.schema.diff.change.AddColumnChange;
+import com.stano.schema.diff.change.AddConstraintChange;
 import com.stano.schema.diff.change.AddFunctionChange;
+import com.stano.schema.diff.change.AddKeyChange;
 import com.stano.schema.diff.change.AddProcedureChange;
+import com.stano.schema.diff.change.AddRelationChange;
 import com.stano.schema.diff.change.AddTableChange;
+import com.stano.schema.diff.change.DropColumnChange;
+import com.stano.schema.diff.change.DropConstraintChange;
 import com.stano.schema.diff.change.DropFunctionChange;
+import com.stano.schema.diff.change.DropKeyChange;
 import com.stano.schema.diff.change.DropProcedureChange;
+import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGeneratorOptions;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
+import com.stano.schema.model.Constraint;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.Function;
+import com.stano.schema.model.Key;
+import com.stano.schema.model.KeyColumn;
+import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Procedure;
+import com.stano.schema.model.Relation;
+import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +58,7 @@ class H2MigrationGeneratorTest {
     gen.generate();
 
     String sql = sw.toString();
-    assertTrue(sql.contains("CREATE TABLE users ()"));
+    assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS users ()"));
   }
 
   @Test
@@ -74,7 +90,7 @@ class H2MigrationGeneratorTest {
     gen.generate();
 
     String sql = sw.toString();
-    assertAll(() -> assertTrue(sql.contains("ALTER TABLE customer RENAME TO customers")));
+    assertAll(() -> assertTrue(sql.contains("ALTER TABLE IF EXISTS customer RENAME TO customers")));
   }
 
   @Test
@@ -93,7 +109,8 @@ class H2MigrationGeneratorTest {
     assertAll(
         () ->
             assertTrue(
-                sql.contains("ALTER TABLE customers ALTER COLUMN name RENAME TO full_name")));
+                sql.contains(
+                    "ALTER TABLE customers ALTER COLUMN IF EXISTS name RENAME TO full_name")));
   }
 
   @Test
@@ -201,8 +218,209 @@ class H2MigrationGeneratorTest {
 
     String sql = sw.toString();
     assertTrue(
-        sql.contains("ADD CONSTRAINT ck_product_price_")
+        sql.contains("ADD CONSTRAINT IF NOT EXISTS ck_product_price_")
             && sql.contains("check(price >= 0 and price <= 100)"),
         "expected a min/max CHECK constraint, got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards ADD PRIMARY KEY with IF NOT EXISTS")
+  void generatesAddPrimaryKeyIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("id"));
+    Key key = new Key(KeyType.PRIMARY, cols);
+    changeSet.addChange(new AddKeyChange("orders", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(
+        sql.contains("ADD CONSTRAINT IF NOT EXISTS pk_orders PRIMARY KEY (id)"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards ADD unique index with IF NOT EXISTS")
+  void generatesAddUniqueKeyIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("email"));
+    Key key = new Key(KeyType.UNIQUE, cols);
+    changeSet.addChange(new AddKeyChange("users", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("CREATE UNIQUE INDEX IF NOT EXISTS"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("generates a plain unique index and drops the filter (H2 has no partial-index syntax)")
+  void generatesUniqueIndexWithoutFilter() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("parent_id"));
+    Key key =
+        new Key(KeyType.INDEX, cols, false, false, true, null, "parent_id is not null");
+    changeSet.addChange(new AddKeyChange("users", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("CREATE UNIQUE INDEX IF NOT EXISTS"), "got: " + sql),
+        () -> assertTrue(!sql.contains("WHERE"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("guards DROP PRIMARY KEY with IF EXISTS")
+  void generatesDropPrimaryKeyIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    List<KeyColumn> cols = new ArrayList<>();
+    cols.add(new KeyColumn("id"));
+    Key key = new Key(KeyType.PRIMARY, cols);
+    changeSet.addChange(new DropKeyChange("orders", key, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS pk_orders"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards ADD CONSTRAINT with IF NOT EXISTS")
+  void generatesAddConstraintIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(
+        new AddConstraintChange(
+            "orders", new Constraint("ck_orders_total", "total >= 0", DatabaseType.H2)));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(
+        sql.contains("ADD CONSTRAINT IF NOT EXISTS ck_orders_total CHECK (total >= 0)"),
+        "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards DROP CONSTRAINT with IF EXISTS")
+  void generatesDropConstraintIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(new DropConstraintChange("orders", "ck_orders_total"));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS ck_orders_total"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards ADD RELATION with IF NOT EXISTS")
+  void generatesAddRelationIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    Relation rel =
+        new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false);
+    changeSet.addChange(new AddRelationChange(rel, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () -> assertTrue(sql.contains("ADD CONSTRAINT IF NOT EXISTS fk_orders1"), "got: " + sql),
+        () ->
+            assertTrue(
+                sql.contains("FOREIGN KEY (customer_id) REFERENCES customers(id)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("generates composite FOREIGN KEY listing all column pairs for add-relation change")
+  void generatesAddCompositeRelationListsAllColumnPairs() {
+    ChangeSet changeSet = new ChangeSet();
+    Relation rel =
+        Relation.composite(
+            "assignments",
+            "properties",
+            List.of(
+                new ColumnPair("parent_assignment_id", "id"),
+                new ColumnPair("property_id", "property_id")),
+            RelationType.CASCADE,
+            false);
+    changeSet.addChange(new AddRelationChange(rel, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertAll(
+        () ->
+            assertTrue(
+                sql.contains("FOREIGN KEY (parent_assignment_id, property_id)"), "got: " + sql),
+        () -> assertTrue(sql.contains("REFERENCES properties(id, property_id)"), "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("guards DROP RELATION with IF EXISTS")
+  void generatesDropRelationIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    Relation rel =
+        new Relation("orders", "customer_id", "customers", "id", RelationType.CASCADE, false);
+    changeSet.addChange(new DropRelationChange(rel, 1));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS fk_orders1"), "got: " + sql);
+  }
+
+  @Test
+  @DisplayName("guards DROP COLUMN with IF EXISTS")
+  void generatesDropColumnIsGuarded() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(new DropColumnChange("users", "legacy", List.of()));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
+    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
+    gen.generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("DROP COLUMN IF EXISTS legacy"), "got: " + sql);
   }
 }

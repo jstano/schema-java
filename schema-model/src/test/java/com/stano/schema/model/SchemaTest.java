@@ -171,6 +171,43 @@ class SchemaTest {
   }
 
   @Test
+  @DisplayName("buildReverseRelations preserves all column pairs of a composite relation")
+  void buildReverseRelationsPreservesCompositeColumnPairs() throws MalformedURLException {
+    Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());
+    Table parent = new Table(schema, "public", "properties", null, LockEscalation.AUTO, false);
+    Table child = new Table(schema, "public", "assignments", null, LockEscalation.AUTO, false);
+    parent.getColumns().add(new Column("id", ColumnType.SEQUENCE, 0, true));
+    parent.getColumns().add(new Column("org_id", ColumnType.INT, 0, true));
+    child.getColumns().add(new Column("property_id", ColumnType.INT, 0, false));
+    child.getColumns().add(new Column("org_id", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(
+            Relation.composite(
+                "assignments",
+                "properties",
+                List.of(new ColumnPair("property_id", "id"), new ColumnPair("org_id", "org_id")),
+                RelationType.CASCADE,
+                false));
+    schema.addTable(parent);
+    schema.addTable(child);
+
+    schema.buildReverseRelations();
+
+    assertEquals(1, parent.getReverseRelations().size());
+    Relation reverse = parent.getReverseRelations().get(0);
+    assertTrue(reverse.isComposite());
+    assertEquals(reverse.getFromTableName(), "properties");
+    assertEquals(reverse.getToTableName(), "assignments");
+    List<ColumnPair> pairs = reverse.getColumnPairs();
+    assertEquals(2, pairs.size());
+    assertEquals(pairs.get(0).getFromColumnName(), "id");
+    assertEquals(pairs.get(0).getToColumnName(), "property_id");
+    assertEquals(pairs.get(1).getFromColumnName(), "org_id");
+    assertEquals(pairs.get(1).getToColumnName(), "org_id");
+  }
+
+  @Test
   @DisplayName("validate flags SETNULL on required from-column (in SchemaSpec)")
   void validateFlagsSETNULLOnRequiredFromColumn() throws MalformedURLException {
     Schema schema = new Schema(URI.create("https://example.com/schema.json").toURL());

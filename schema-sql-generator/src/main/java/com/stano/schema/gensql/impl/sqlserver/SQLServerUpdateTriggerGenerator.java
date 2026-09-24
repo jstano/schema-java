@@ -5,11 +5,13 @@ import com.stano.schema.model.Aggregation;
 import com.stano.schema.model.AggregationColumn;
 import com.stano.schema.model.AggregationGroup;
 import com.stano.schema.model.AggregationType;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Table;
 import com.stano.schema.model.TriggerType;
 import java.util.List;
+import java.util.stream.Collectors;
 
 class SQLServerUpdateTriggerGenerator extends SQLServerBaseTriggerGenerator {
 
@@ -42,64 +44,40 @@ class SQLServerUpdateTriggerGenerator extends SQLServerBaseTriggerGenerator {
     // output the enforce statements
     for (Relation relation : relations) {
       if (relation.getType() == RelationType.ENFORCE
-          || relation.getType() == RelationType.CASCADE) {
-        sqlWriter.println("   if update(" + relation.getFromColumnName() + ")");
-        sqlWriter.println("   begin");
-        sqlWriter.println(
-            "      if (select count(*) from Inserted where "
-                + relation.getFromColumnName()
-                + " is not null) > 0");
-        sqlWriter.println("      begin");
-        sqlWriter.println(
-            "         if (select count(*) from "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + " p,Inserted i where p."
-                + relation.getToColumnName()
-                + " = i."
-                + relation.getFromColumnName()
-                + ") = 0");
-        sqlWriter.println("         begin");
-        sqlWriter.println("            rollback transaction");
-        sqlWriter.println(
-            "            raiserror ('The "
-                + relation.getFromColumnName()
-                + "''s value doesn''t exist in the "
-                + relation.getToTableName()
-                + " table.', 16, 1)");
-        sqlWriter.println("            return");
-        sqlWriter.println("         end");
-        sqlWriter.println("      end");
-        sqlWriter.println("   end;");
-        sqlWriter.println();
-      } else if (relation.getType() == RelationType.SETNULL) {
-        sqlWriter.println("   if update(" + relation.getFromColumnName() + ")");
-        sqlWriter.println("   begin");
-        sqlWriter.println(
-            "      if (select count(*) from Inserted where "
-                + relation.getFromColumnName()
-                + " is not null) > 0");
-        sqlWriter.println("      begin");
-        sqlWriter.println(
-            "         if (select count(*) from "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + " p,Inserted i where p."
-                + relation.getToColumnName()
-                + " = i."
-                + relation.getFromColumnName()
-                + ") = 0");
-        sqlWriter.println("         begin");
-        sqlWriter.println("            rollback transaction");
-        sqlWriter.println(
-            "            raiserror ('The "
-                + relation.getFromColumnName()
-                + "''s value doesn''t exist in the "
-                + relation.getToTableName()
-                + " table.', 16, 1)");
-        sqlWriter.println("            return");
-        sqlWriter.println("         end");
-        sqlWriter.println("      end");
-        sqlWriter.println("   end;");
-        sqlWriter.println();
+          || relation.getType() == RelationType.CASCADE
+          || relation.getType() == RelationType.SETNULL) {
+        if (relation.isComposite()) {
+          outputCompositeUpdateValidation(relation);
+        } else {
+          sqlWriter.println("   if update(" + relation.getFromColumnName() + ")");
+          sqlWriter.println("   begin");
+          sqlWriter.println(
+              "      if (select count(*) from Inserted where "
+                  + relation.getFromColumnName()
+                  + " is not null) > 0");
+          sqlWriter.println("      begin");
+          sqlWriter.println(
+              "         if (select count(*) from "
+                  + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
+                  + " p,Inserted i where p."
+                  + relation.getToColumnName()
+                  + " = i."
+                  + relation.getFromColumnName()
+                  + ") = 0");
+          sqlWriter.println("         begin");
+          sqlWriter.println("            rollback transaction");
+          sqlWriter.println(
+              "            raiserror ('The "
+                  + relation.getFromColumnName()
+                  + "''s value doesn''t exist in the "
+                  + relation.getToTableName()
+                  + " table.', 16, 1)");
+          sqlWriter.println("            return");
+          sqlWriter.println("         end");
+          sqlWriter.println("      end");
+          sqlWriter.println("   end;");
+          sqlWriter.println();
+        }
       }
     }
 
@@ -114,6 +92,55 @@ class SQLServerUpdateTriggerGenerator extends SQLServerBaseTriggerGenerator {
     outputAdditionalTriggerStatements(table, TriggerType.UPDATE);
 
     sqlWriter.println("END" + statementSeparator);
+    sqlWriter.println();
+  }
+
+  /**
+   * Composite-relation replacement for the single-column {@code update(col)}/{@code p.col = i.col}
+   * validation shape above, which has no direct multi-column equivalent: every column in the key is
+   * AND-joined into the {@code update(...)}, not-null, and parent-match clauses.
+   */
+  private void outputCompositeUpdateValidation(Relation relation) {
+
+    String updateClause =
+        relation.getColumnPairs().stream()
+            .map(pair -> "update(" + pair.getFromColumnName() + ")")
+            .collect(Collectors.joining(" or "));
+    String notNullClause =
+        relation.getColumnPairs().stream()
+            .map(pair -> pair.getFromColumnName() + " is not null")
+            .collect(Collectors.joining(" and "));
+    String matchClause =
+        relation.getColumnPairs().stream()
+            .map(pair -> "p." + pair.getToColumnName() + " = i." + pair.getFromColumnName())
+            .collect(Collectors.joining(" and "));
+    String columnList =
+        relation.getColumnPairs().stream()
+            .map(ColumnPair::getFromColumnName)
+            .collect(Collectors.joining(", "));
+
+    sqlWriter.println("   if " + updateClause);
+    sqlWriter.println("   begin");
+    sqlWriter.println("      if (select count(*) from Inserted where " + notNullClause + ") > 0");
+    sqlWriter.println("      begin");
+    sqlWriter.println(
+        "         if (select count(*) from "
+            + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
+            + " p,Inserted i where "
+            + matchClause
+            + ") = 0");
+    sqlWriter.println("         begin");
+    sqlWriter.println("            rollback transaction");
+    sqlWriter.println(
+        "            raiserror ('The "
+            + columnList
+            + "''s value doesn''t exist in the "
+            + relation.getToTableName()
+            + " table.', 16, 1)");
+    sqlWriter.println("            return");
+    sqlWriter.println("         end");
+    sqlWriter.println("      end");
+    sqlWriter.println("   end;");
     sqlWriter.println();
   }
 

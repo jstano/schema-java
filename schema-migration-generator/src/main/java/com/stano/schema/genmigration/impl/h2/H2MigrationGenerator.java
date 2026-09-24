@@ -25,11 +25,17 @@ import com.stano.schema.gensql.impl.common.ColumnTypeMapper;
 import com.stano.schema.gensql.impl.h2.H2ColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.Naming;
 import java.io.PrintWriter;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class H2MigrationGenerator extends MigrationGenerator {
+  private static final Logger LOGGER = LoggerFactory.getLogger(H2MigrationGenerator.class);
+
   private final ColumnTypeMapper mapper;
 
   public H2MigrationGenerator(MigrationGeneratorOptions options) {
@@ -40,7 +46,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateAddTable(AddTableChange change) {
     PrintWriter w = options.getWriter();
-    w.println("CREATE TABLE " + change.getTableName() + " ()");
+    w.println("CREATE TABLE IF NOT EXISTS " + change.getTableName() + " ()");
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -56,7 +62,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateRenameTable(RenameTableChange change) {
     PrintWriter w = options.getWriter();
-    w.println("ALTER TABLE " + change.getOldName() + " RENAME TO " + change.getNewName());
+    w.println("ALTER TABLE IF EXISTS " + change.getOldName() + " RENAME TO " + change.getNewName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -67,7 +73,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
     w.println(
         "ALTER TABLE "
             + change.getTableName()
-            + " ALTER COLUMN "
+            + " ALTER COLUMN IF EXISTS "
             + change.getOldName()
             + " RENAME TO "
             + change.getNewName());
@@ -82,7 +88,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
     StringBuilder sb = new StringBuilder();
     sb.append("ALTER TABLE ")
         .append(change.getTableName())
-        .append(" ADD COLUMN ")
+        .append(" ADD COLUMN IF NOT EXISTS ")
         .append(col.getName())
         .append(" ")
         .append(mapper.toSqlType(col));
@@ -109,7 +115,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
       w.println(
           "ALTER TABLE "
               + change.getTableName()
-              + " ADD CONSTRAINT "
+              + " ADD CONSTRAINT IF NOT EXISTS "
               + getCheckConstraintName(change.getTableName(), col.getName())
               + " "
               + checkSql);
@@ -121,7 +127,11 @@ public class H2MigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateDropColumn(DropColumnChange change) {
     PrintWriter w = options.getWriter();
-    w.println("ALTER TABLE " + change.getTableName() + " DROP COLUMN " + change.getColumnName());
+    w.println(
+        "ALTER TABLE "
+            + change.getTableName()
+            + " DROP COLUMN IF EXISTS "
+            + change.getColumnName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -133,14 +143,14 @@ public class H2MigrationGenerator extends MigrationGenerator {
     String tableName = change.getTableName();
     String colName = newCol.getName();
 
-    w.println("ALTER TABLE " + tableName + " DROP COLUMN " + colName);
+    w.println("ALTER TABLE " + tableName + " DROP COLUMN IF EXISTS " + colName);
     w.print(options.getStatementSeparator());
     w.println();
 
     StringBuilder sb = new StringBuilder();
     sb.append("ALTER TABLE ")
         .append(tableName)
-        .append(" ADD COLUMN ")
+        .append(" ADD COLUMN IF NOT EXISTS ")
         .append(colName)
         .append(" ")
         .append(mapper.toSqlType(newCol));
@@ -163,13 +173,15 @@ public class H2MigrationGenerator extends MigrationGenerator {
         w.println(
             "ALTER TABLE "
                 + change.getTableName()
-                + " ADD PRIMARY KEY ("
+                + " ADD CONSTRAINT IF NOT EXISTS "
+                + Naming.primaryKeyName(DatabaseType.H2, change.getTableName())
+                + " PRIMARY KEY ("
                 + change.getKey().getColumnsAsString()
                 + ")");
         break;
       case UNIQUE:
         w.println(
-            "CREATE UNIQUE INDEX "
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
                 + Naming.uniqueKeyName(DatabaseType.H2, change.getTableName(), change.getOrdinal())
                 + " ON "
                 + change.getTableName()
@@ -178,8 +190,13 @@ public class H2MigrationGenerator extends MigrationGenerator {
                 + ")");
         break;
       case INDEX:
+        if (change.getKey().getFilter() != null) {
+          LOGGER.warn("H2 does not support partial/filtered indexes; ignoring where on index");
+        }
         w.println(
-            "CREATE INDEX "
+            "CREATE "
+                + (change.getKey().isUnique() ? "UNIQUE " : "")
+                + "INDEX IF NOT EXISTS "
                 + Naming.indexName(DatabaseType.H2, change.getTableName(), change.getOrdinal())
                 + " ON "
                 + change.getTableName()
@@ -200,7 +217,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
         w.println(
             "ALTER TABLE "
                 + change.getTableName()
-                + " DROP CONSTRAINT "
+                + " DROP CONSTRAINT IF EXISTS "
                 + Naming.primaryKeyName(DatabaseType.H2, change.getTableName()));
         break;
       case UNIQUE:
@@ -225,7 +242,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
     w.println(
         "ALTER TABLE "
             + change.getTableName()
-            + " ADD CONSTRAINT "
+            + " ADD CONSTRAINT IF NOT EXISTS "
             + change.getConstraint().getName()
             + " CHECK ("
             + change.getConstraint().getSql()
@@ -238,7 +255,10 @@ public class H2MigrationGenerator extends MigrationGenerator {
   protected void generateDropConstraint(DropConstraintChange change) {
     PrintWriter w = options.getWriter();
     w.println(
-        "ALTER TABLE " + change.getTableName() + " DROP CONSTRAINT " + change.getConstraintName());
+        "ALTER TABLE "
+            + change.getTableName()
+            + " DROP CONSTRAINT IF EXISTS "
+            + change.getConstraintName());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -256,14 +276,18 @@ public class H2MigrationGenerator extends MigrationGenerator {
     w.println(
         "ALTER TABLE "
             + change.getRelation().getFromTableName()
-            + " ADD CONSTRAINT "
+            + " ADD CONSTRAINT IF NOT EXISTS "
             + fkName
             + " FOREIGN KEY ("
-            + change.getRelation().getFromColumnName()
+            + change.getRelation().getColumnPairs().stream()
+                .map(ColumnPair::getFromColumnName)
+                .collect(Collectors.joining(", "))
             + ") REFERENCES "
             + change.getRelation().getToTableName()
             + "("
-            + change.getRelation().getToColumnName()
+            + change.getRelation().getColumnPairs().stream()
+                .map(ColumnPair::getToColumnName)
+                .collect(Collectors.joining(", "))
             + ")"
             + onDelete);
     w.print(options.getStatementSeparator());
@@ -277,7 +301,10 @@ public class H2MigrationGenerator extends MigrationGenerator {
         Naming.foreignKeyName(
             DatabaseType.H2, change.getRelation().getFromTableName(), change.getOrdinal());
     w.println(
-        "ALTER TABLE " + change.getRelation().getFromTableName() + " DROP CONSTRAINT " + fkName);
+        "ALTER TABLE "
+            + change.getRelation().getFromTableName()
+            + " DROP CONSTRAINT IF EXISTS "
+            + fkName);
     w.print(options.getStatementSeparator());
     w.println();
   }

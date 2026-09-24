@@ -2,10 +2,12 @@ package com.stano.schema.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -108,5 +110,56 @@ class RelationTest {
     assertTrue(errors.get(0).contains("relation specifies setnull"));
 
     assertFalse(errors.stream().anyMatch(e -> e.contains("child_opt.parent_id")));
+  }
+
+  @Test
+  @DisplayName("composite should build a multi-column relation and expose all pairs")
+  void compositeShouldBuildMultiColumnRelation() {
+    Relation rel =
+        Relation.composite(
+            "assignment",
+            "assignment",
+            List.of(
+                new ColumnPair("ParentAssignmentID", "ID"),
+                new ColumnPair("PropertyID", "PropertyID")),
+            RelationType.CASCADE,
+            false);
+
+    assertTrue(rel.isComposite());
+    assertEquals(rel.getColumnPairs().size(), 2);
+    assertEquals(rel.getFromColumnName(), "ParentAssignmentID");
+    assertEquals(rel.getToColumnName(), "ID");
+  }
+
+  @Test
+  @DisplayName("composite should reject an empty column pair list")
+  void compositeShouldRejectEmptyList() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            Relation.composite("assignment", "assignment", List.of(), RelationType.CASCADE, false));
+  }
+
+  @Test
+  @DisplayName("composite should reject a single column pair")
+  void compositeShouldRejectSinglePair() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            Relation.composite(
+                "assignment",
+                "assignment",
+                List.of(new ColumnPair("ParentAssignmentID", "ID")),
+                RelationType.CASCADE,
+                false));
+  }
+
+  @Test
+  @DisplayName("single-column constructor should produce a non-composite relation")
+  void singleColumnConstructorShouldNotBeComposite() {
+    Relation rel = new Relation("orders", "user_id", "users", "id", RelationType.CASCADE, false);
+
+    assertFalse(rel.isComposite());
+    assertEquals(rel.getColumnPairs().size(), 1);
   }
 }

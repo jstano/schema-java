@@ -11,6 +11,7 @@ import com.stano.schema.model.Table;
 import com.stano.schema.model.TriggerType;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
 
@@ -65,6 +66,27 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
     sqlWriter.println();
   }
 
+  /**
+   * Joins every column pair of a (reverse) relation into a {@code leftAlias.col = rightAlias.col}
+   * join predicate, used for the composite-relation join-based trigger SQL that replaces the
+   * single-column {@code in (select col from deleted)} idiom, which has no direct multi-column
+   * equivalent.
+   */
+  private String joinCondition(Relation relation, String leftAlias, String rightAlias) {
+
+    return relation.getColumnPairs().stream()
+        .map(
+            pair ->
+                leftAlias
+                    + "."
+                    + pair.getToColumnName()
+                    + " = "
+                    + rightAlias
+                    + "."
+                    + pair.getFromColumnName())
+        .collect(Collectors.joining(" and "));
+  }
+
   private void outputDeleteEnforceStatements(List relations, Column column) {
 
     Iterator relationIterator = relations.iterator();
@@ -80,34 +102,57 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
 
         firstRelation = false;
 
-        sqlWriter.println(
-            "   if (select count(*) from "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + " where "
-                + relation.getToColumnName()
-                + " in (select "
-                + column.getName()
-                + " from deleted)) > 0");
-        sqlWriter.println("   begin");
-        sqlWriter.println(
-            "      select @msg = 'The "
-                + getFullyQualifiedTableName(schema.getTable(relation.getFromTableName()))
-                + " ' + (select top 1 convert(varchar, "
-                + column.getName()
-                + ") from deleted where "
-                + column.getName()
-                + " in (select "
-                + relation.getToColumnName()
-                + " from "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + ")) + ' cannot be deleted. It is being used by a row in the "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + " table.'");
-        sqlWriter.println("      rollback transaction");
-        sqlWriter.println("      raiserror (@msg, 16, 1)");
-        sqlWriter.println("      return");
-        sqlWriter.println("   end;");
-        sqlWriter.println();
+        String childTable = getFullyQualifiedTableName(schema.getTable(relation.getToTableName()));
+
+        if (relation.isComposite()) {
+          sqlWriter.println(
+              "   if exists (select 1 from "
+                  + childTable
+                  + " c inner join deleted d on "
+                  + joinCondition(relation, "c", "d")
+                  + ")");
+          sqlWriter.println("   begin");
+          sqlWriter.println(
+              "      select @msg = 'The row in "
+                  + getFullyQualifiedTableName(schema.getTable(relation.getFromTableName()))
+                  + " cannot be deleted. It is being used by a row in the "
+                  + childTable
+                  + " table.'");
+          sqlWriter.println("      rollback transaction");
+          sqlWriter.println("      raiserror (@msg, 16, 1)");
+          sqlWriter.println("      return");
+          sqlWriter.println("   end;");
+          sqlWriter.println();
+        } else {
+          sqlWriter.println(
+              "   if (select count(*) from "
+                  + childTable
+                  + " where "
+                  + relation.getToColumnName()
+                  + " in (select "
+                  + column.getName()
+                  + " from deleted)) > 0");
+          sqlWriter.println("   begin");
+          sqlWriter.println(
+              "      select @msg = 'The "
+                  + getFullyQualifiedTableName(schema.getTable(relation.getFromTableName()))
+                  + " ' + (select top 1 convert(varchar, "
+                  + column.getName()
+                  + ") from deleted where "
+                  + column.getName()
+                  + " in (select "
+                  + relation.getToColumnName()
+                  + " from "
+                  + childTable
+                  + ")) + ' cannot be deleted. It is being used by a row in the "
+                  + childTable
+                  + " table.'");
+          sqlWriter.println("      rollback transaction");
+          sqlWriter.println("      raiserror (@msg, 16, 1)");
+          sqlWriter.println("      return");
+          sqlWriter.println("   end;");
+          sqlWriter.println();
+        }
       }
     }
   }
@@ -121,16 +166,35 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
       Relation relation = (Relation) relationIterator.next();
 
       if (relation.getType() == RelationType.SETNULL) {
-        sqlWriter.println(
-            "   update "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + " set "
-                + relation.getToColumnName()
-                + " = null where "
-                + relation.getToColumnName()
-                + " in (select "
-                + column.getName()
-                + " from deleted);");
+        String childTable = getFullyQualifiedTableName(schema.getTable(relation.getToTableName()));
+
+        if (relation.isComposite()) {
+          String setClause =
+              relation.getColumnPairs().stream()
+                  .map(pair -> pair.getToColumnName() + " = null")
+                  .collect(Collectors.joining(", "));
+          sqlWriter.println(
+              "   update "
+                  + childTable
+                  + " set "
+                  + setClause
+                  + " from "
+                  + childTable
+                  + " inner join deleted on "
+                  + joinCondition(relation, childTable, "deleted")
+                  + ";");
+        } else {
+          sqlWriter.println(
+              "   update "
+                  + childTable
+                  + " set "
+                  + relation.getToColumnName()
+                  + " = null where "
+                  + relation.getToColumnName()
+                  + " in (select "
+                  + column.getName()
+                  + " from deleted);");
+        }
       }
     }
   }
@@ -144,14 +208,27 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
       Relation relation = (Relation) relationIterator.next();
 
       if (relation.getType() == RelationType.CASCADE) {
-        sqlWriter.println(
-            "   delete from "
-                + getFullyQualifiedTableName(schema.getTable(relation.getToTableName()))
-                + " where "
-                + relation.getToColumnName()
-                + " in (select "
-                + column.getName()
-                + " from deleted);");
+        String childTable = getFullyQualifiedTableName(schema.getTable(relation.getToTableName()));
+
+        if (relation.isComposite()) {
+          sqlWriter.println(
+              "   delete "
+                  + childTable
+                  + " from "
+                  + childTable
+                  + " inner join deleted on "
+                  + joinCondition(relation, childTable, "deleted")
+                  + ";");
+        } else {
+          sqlWriter.println(
+              "   delete from "
+                  + childTable
+                  + " where "
+                  + relation.getToColumnName()
+                  + " in (select "
+                  + column.getName()
+                  + " from deleted);");
+        }
       }
     }
   }

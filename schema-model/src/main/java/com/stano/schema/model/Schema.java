@@ -365,18 +365,33 @@ public class Schema {
           String parentTableName = relation.getToTableName();
           Table parentTable = getTable(parentTableName);
 
-          Relation reverseRelation =
-              new Relation(
-                  relation.getToTableName(),
-                  relation.getToColumnName(),
-                  relation.getFromTableName(),
-                  relation.getFromColumnName(),
-                  relation.getType(),
-                  false);
+          Relation reverseRelation = buildReverseRelation(relation);
 
           parentTable.getReverseRelations().add(reverseRelation);
         }
       }
     }
+  }
+
+  private static Relation buildReverseRelation(Relation relation) {
+    if (relation.isComposite()) {
+      List<ColumnPair> reversedPairs =
+          relation.getColumnPairs().stream()
+              .map(pair -> new ColumnPair(pair.getToColumnName(), pair.getFromColumnName()))
+              .collect(Collectors.toList());
+      return Relation.composite(
+          relation.getToTableName(),
+          relation.getFromTableName(),
+          reversedPairs,
+          relation.getType(),
+          false);
+    }
+    return new Relation(
+        relation.getToTableName(),
+        relation.getToColumnName(),
+        relation.getFromTableName(),
+        relation.getFromColumnName(),
+        relation.getType(),
+        false);
   }
 }

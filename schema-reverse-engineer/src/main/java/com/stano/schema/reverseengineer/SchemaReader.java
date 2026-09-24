@@ -1,6 +1,7 @@
 package com.stano.schema.reverseengineer;
 
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Constraint;
 import com.stano.schema.model.Key;
@@ -272,6 +273,7 @@ public class SchemaReader {
 
       try (var resultSet = metaData.getImportedKeys(null, dbSchema, table.getName())) {
         while (resultSet.next()) {
+          String fkName = resultSet.getString("FK_NAME");
           String pkTableName = resultSet.getString("PKTABLE_NAME");
           String pkColumnName = resultSet.getString("PKCOLUMN_NAME");
           String fkTableName = resultSet.getString("FKTABLE_NAME");
@@ -286,6 +288,7 @@ public class SchemaReader {
 
           foreignKeys.add(
               new ForeignKeyData(
+                  fkName,
                   pkTableName,
                   pkColumnName,
                   fkTableName,
@@ -296,30 +299,61 @@ public class SchemaReader {
         }
       }
 
-      for (var foreignKey : foreignKeys) {
-        var deleteRule = foreignKey.deleteRule();
-        var relationType =
-            switch (deleteRule) {
-              case "importedNoAction" -> RelationType.DONOTHING;
-              case "importedKeyCascade" -> RelationType.CASCADE;
-              case "importedKeyRestrict" -> RelationType.ENFORCE;
-              case "importedKeySetNull" -> RelationType.SETNULL;
-              case "importedKeySetDefault" -> RelationType.SETNULL;
-              default -> RelationType.DONOTHING;
-            };
+      table.getRelations().addAll(groupForeignKeys(foreignKeys));
+    }
+  }
 
-        table
-            .getRelations()
-            .add(
-                new Relation(
-                    foreignKey.fkTableName(),
-                    foreignKey.fkColumnName(),
-                    foreignKey.pkTableName(),
-                    foreignKey.pkColumnName(),
-                    relationType,
-                    false));
+  /**
+   * Groups per-column {@link ForeignKeyData} rows (as returned by {@link
+   * DatabaseMetaData#getImportedKeys}, one row per FK column) by {@code fkName} into one {@link
+   * Relation} per constraint, ordered by {@code keySeq} within each group. A single-row group
+   * produces a single-column {@link Relation}; a multi-row group produces a composite {@link
+   * Relation} via {@link Relation#composite}.
+   */
+  static List<Relation> groupForeignKeys(List<ForeignKeyData> foreignKeys) {
+    var byConstraint = new LinkedHashMap<String, List<ForeignKeyData>>();
+    for (var foreignKey : foreignKeys) {
+      byConstraint.computeIfAbsent(foreignKey.fkName(), k -> new ArrayList<>()).add(foreignKey);
+    }
+
+    var relations = new ArrayList<Relation>();
+    for (var rows : byConstraint.values()) {
+      var sortedRows = rows.stream().sorted().toList();
+      var first = sortedRows.get(0);
+      var relationType = mapDeleteRule(first.deleteRule());
+
+      if (sortedRows.size() == 1) {
+        relations.add(
+            new Relation(
+                first.fkTableName(),
+                first.fkColumnName(),
+                first.pkTableName(),
+                first.pkColumnName(),
+                relationType,
+                false));
+      } else {
+        var columnPairs =
+            sortedRows.stream()
+                .map(row -> new ColumnPair(row.fkColumnName(), row.pkColumnName()))
+                .toList();
+        relations.add(
+            Relation.composite(
+                first.fkTableName(), first.pkTableName(), columnPairs, relationType, false));
       }
     }
+
+    return relations;
+  }
+
+  private static RelationType mapDeleteRule(String deleteRule) {
+    return switch (deleteRule) {
+      case "importedNoAction" -> RelationType.DONOTHING;
+      case "importedKeyCascade" -> RelationType.CASCADE;
+      case "importedKeyRestrict" -> RelationType.ENFORCE;
+      case "importedKeySetNull" -> RelationType.SETNULL;
+      case "importedKeySetDefault" -> RelationType.SETNULL;
+      default -> RelationType.DONOTHING;
+    };
   }
 
   ColumnType getColumnType(int dataType, String typeName, boolean autoIncrement, int columnSize) {

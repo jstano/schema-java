@@ -1,8 +1,10 @@
 package com.stano.schema.gensql.impl.common;
 
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Table;
+import java.util.stream.Collectors;
 
 public class RelationGenerator extends BaseGenerator {
 
@@ -46,11 +48,17 @@ public class RelationGenerator extends BaseGenerator {
     sqlWriter.print(" add constraint ");
     sqlWriter.print(relationName);
     sqlWriter.print(" foreign key (");
-    sqlWriter.print(relation.getFromColumnName());
+    sqlWriter.print(
+        relation.getColumnPairs().stream()
+            .map(ColumnPair::getFromColumnName)
+            .collect(Collectors.joining(", ")));
     sqlWriter.print(") references ");
     sqlWriter.print(getFullyQualifiedTableName(schema.getTable(relation.getToTableName())));
     sqlWriter.print("(");
-    sqlWriter.print(relation.getToColumnName());
+    sqlWriter.print(
+        relation.getColumnPairs().stream()
+            .map(ColumnPair::getToColumnName)
+            .collect(Collectors.joining(", ")));
     sqlWriter.print(") on delete ");
     sqlWriter.print(operation);
     sqlWriter.println(statementSeparator);

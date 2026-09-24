@@ -3,6 +3,7 @@ package com.stano.schema.gendiagram.impl;
 import com.stano.schema.gendiagram.DiagramGenerator;
 import com.stano.schema.gendiagram.DiagramGeneratorOptions;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
@@ -45,7 +46,10 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
             .collect(Collectors.toSet());
 
     Set<String> fkColumns =
-        table.getRelations().stream().map(Relation::getFromColumnName).collect(Collectors.toSet());
+        table.getRelations().stream()
+            .flatMap(r -> r.getColumnPairs().stream())
+            .map(ColumnPair::getFromColumnName)
+            .collect(Collectors.toSet());
 
     writer.println("  " + table.getName() + " {");
     for (Column column : table.getColumns()) {
@@ -64,6 +68,10 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
   private void outputRelations(Table table) {
     for (Relation relation : table.getRelations()) {
       String cardinality = toCardinality(relation.getType());
+      String fromColumns =
+          relation.getColumnPairs().stream()
+              .map(ColumnPair::getFromColumnName)
+              .collect(Collectors.joining(", "));
       writer.println(
           "  "
               + relation.getFromTableName()
@@ -72,7 +80,7 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
               + " "
               + relation.getToTableName()
               + " : \""
-              + relation.getFromColumnName()
+              + fromColumns
               + "\"");
     }
   }
