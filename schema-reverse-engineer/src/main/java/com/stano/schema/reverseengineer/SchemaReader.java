@@ -3,7 +3,6 @@ package com.stano.schema.reverseengineer;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
-import com.stano.schema.model.Constraint;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyColumn;
 import com.stano.schema.model.KeyType;
@@ -11,11 +10,10 @@ import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
+import com.stano.schema.reverseengineer.impl.common.DialectFactory;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,7 +55,8 @@ public class SchemaReader {
       populateTables(schema, metaData, dbSchema);
       populateColumns(schema, metaData, dbSchema);
       populatePrimaryKeys(schema, metaData, dbSchema);
-      populateConstraints(schema, connection);
+      // The one engine-specific step goes through the dialect the driver names.
+      new DialectFactory().resolve(connection).populateConstraints(schema, connection, dbSchema);
       populateKeys(schema, metaData, dbSchema);
       populateImportedKeys(schema, metaData, dbSchema);
 
@@ -126,16 +125,23 @@ public class SchemaReader {
       throws SQLException {
     var primaryKeyData = new HashMap<String, List<PrimaryKeyData>>();
 
-    try (var resultSet = metaData.getPrimaryKeys(null, dbSchema, null)) {
-      while (resultSet.next()) {
-        String tableName = resultSet.getString("TABLE_NAME");
-        String columnName = resultSet.getString("COLUMN_NAME");
-        int keySequence = resultSet.getInt("KEY_SEQ");
+    // One call per table, WITH its name: getTables takes a name PATTERN, where null means
+    // no filter, but getPrimaryKeys takes a table NAME and a null is not a filter for it.
+    try (var tableRows = metaData.getTables(null, dbSchema, null, new String[] {"TABLE"})) {
+      while (tableRows.next()) {
+        String perTableName = tableRows.getString("TABLE_NAME");
+        try (var resultSet = metaData.getPrimaryKeys(null, dbSchema, perTableName)) {
+          while (resultSet.next()) {
+            String tableName = resultSet.getString("TABLE_NAME");
+            String columnName = resultSet.getString("COLUMN_NAME");
+            int keySequence = resultSet.getInt("KEY_SEQ");
 
-        primaryKeyData.putIfAbsent(tableName, new ArrayList<>());
-        primaryKeyData
-            .get(tableName)
-            .add(new PrimaryKeyData(tableName, columnName, null, keySequence));
+            primaryKeyData.putIfAbsent(tableName, new ArrayList<>());
+            primaryKeyData
+                .get(tableName)
+                .add(new PrimaryKeyData(tableName, columnName, null, keySequence));
+          }
+        }
       }
     }
 
@@ -154,36 +160,6 @@ public class SchemaReader {
                                 .map(it -> new KeyColumn(it.columnName()))
                                 .toList()));
               });
-    }
-  }
-
-  private void populateConstraints(Schema schema, Connection connection) throws SQLException {
-    try (Statement statement = connection.createStatement()) {
-      try (ResultSet rs =
-          statement.executeQuery(
-              "SELECT conrelid::regclass AS tablename, conname, contype, pg_get_constraintdef(oid)"
-                  + " AS definition"
-                  + " FROM"
-                  + " pg_constraint;")) { // WHERE conrelid =
-        // 'classificationrulecriteriaconfig'::regclass
-        while (rs.next()) {
-          String tableName = rs.getString("tablename");
-          String constraintName = rs.getString("conname");
-          String constraintType = rs.getString("contype");
-          String definition = rs.getString("definition");
-
-          if (constraintType.equals("p")) {
-          } else if (constraintType.equals("u")) {
-          } else if (constraintType.equals("x") || constraintType.equals("c")) {
-            schema
-                .getOptionalTable(tableName)
-                .ifPresent(
-                    table -> {
-                      table.getConstraints().add(new Constraint(constraintName, definition, null));
-                    });
-          }
-        }
-      }
     }
   }
 
