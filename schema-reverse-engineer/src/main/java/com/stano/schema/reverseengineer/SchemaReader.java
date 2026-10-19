@@ -4,9 +4,12 @@ import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.Constraint;
+import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.Function;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyColumn;
 import com.stano.schema.model.KeyType;
+import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
@@ -21,7 +24,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import org.apache.commons.text.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,8 +60,9 @@ public class SchemaReader {
       populateColumns(schema, metaData, dbSchema);
       populatePrimaryKeys(schema, metaData, dbSchema);
       populateConstraints(schema, connection);
-      populateKeys(schema, metaData, dbSchema);
+      populateKeys(schema, connection, dbSchema);
       populateImportedKeys(schema, metaData, dbSchema);
+      populateRoutines(schema, connection, dbSchema);
 
       return schema;
     } catch (SQLException x) {
@@ -110,9 +113,7 @@ public class SchemaReader {
                               nullable.equals("NO"),
                               null,
                               generatedColumn.equals("YES") ? null : columnDef,
-                              generatedColumn.equals("YES")
-                                  ? "generated always as " + columnDef + " stored"
-                                  : null,
+                              generatedColumn.equals("YES") ? columnDef : null,
                               null,
                               null,
                               null,
@@ -187,83 +188,206 @@ public class SchemaReader {
     }
   }
 
-  private void populateKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
+  /**
+   * One column slot of one index, as returned by the {@code pg_index} query. {@code columnName} is
+   * {@code null} for an expression slot (an index on {@code lower(name)}, say).
+   */
+  record IndexRow(
+      String tableName,
+      String indexName,
+      boolean unique,
+      boolean primary,
+      String columnName,
+      boolean include,
+      String predicate) {}
+
+  private void populateKeys(Schema schema, Connection connection, String dbSchema)
       throws SQLException {
+    var indexRows = new ArrayList<IndexRow>();
+
+    try (var statement = connection.prepareStatement(INDEX_QUERY)) {
+      statement.setString(1, dbSchema);
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          indexRows.add(
+              new IndexRow(
+                  rs.getString("table_name"),
+                  rs.getString("index_name"),
+                  rs.getBoolean("is_unique"),
+                  rs.getBoolean("is_primary"),
+                  rs.getString("column_name"),
+                  rs.getBoolean("is_include"),
+                  rs.getString("predicate")));
+        }
+      }
+    }
+
+    applyIndexRows(schema, indexRows);
+
     for (Table table : schema.getTables()) {
-      var primaryKeysResultSet =
-          metaData.getIndexInfo(null, dbSchema, table.getName(), false, false);
-      var keys = new LinkedHashMap<String, List<KeyDataColumn>>();
+      promoteLoneUniqueKey(table);
+    }
+  }
 
-      while (primaryKeysResultSet.next()) {
-        String indexName = primaryKeysResultSet.getString("INDEX_NAME");
-        boolean nonUnique = primaryKeysResultSet.getBoolean("NON_UNIQUE");
-        String columnName = primaryKeysResultSet.getString("COLUMN_NAME");
-        int ordinalPosition = primaryKeysResultSet.getInt("ORDINAL_POSITION");
+  private static final String INDEX_QUERY =
+      "SELECT t.relname AS table_name, i.relname AS index_name, ix.indisunique AS is_unique,"
+          + " ix.indisprimary AS is_primary, a.attname AS column_name,"
+          + " (k.ord > ix.indnkeyatts) AS is_include,"
+          + " pg_get_expr(ix.indpred, ix.indrelid) AS predicate"
+          + " FROM pg_index ix"
+          + " JOIN pg_class t ON t.oid = ix.indrelid"
+          + " JOIN pg_class i ON i.oid = ix.indexrelid"
+          + " JOIN pg_namespace n ON n.oid = t.relnamespace"
+          + " CROSS JOIN LATERAL unnest(ix.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)"
+          + " LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum"
+          + " WHERE n.nspname = ? AND t.relkind IN ('r', 'p')"
+          + " ORDER BY t.relname, i.relname, k.ord";
 
-        keys.putIfAbsent(indexName + ":::" + nonUnique, new ArrayList<>());
-        keys.get(indexName + ":::" + nonUnique).add(new KeyDataColumn(columnName, ordinalPosition));
+  /**
+   * Folds index rows (already ordered by table, index, then column position) into {@link Key}s on
+   * the tables of {@code schema}. Partial indexes keep their predicate and covering indexes their
+   * {@code INCLUDE} columns; a unique index with either is kept as an {@code <index unique>}
+   * because {@code <unique>} can't carry them. The index backing the primary key and indexes behind
+   * exclusion constraints (already captured as constraints) are skipped, as are expression indexes,
+   * which the model can't represent.
+   */
+  static void applyIndexRows(Schema schema, List<IndexRow> rows) {
+    record Group(
+        IndexRow first, List<String> columns, List<String> include, boolean[] hasExpression) {}
+
+    var groups = new ArrayList<Group>();
+    for (IndexRow row : rows) {
+      Group last = groups.isEmpty() ? null : groups.getLast();
+      if (last == null
+          || !last.first().tableName().equals(row.tableName())
+          || !last.first().indexName().equals(row.indexName())) {
+        last = new Group(row, new ArrayList<>(), new ArrayList<>(), new boolean[1]);
+        groups.add(last);
+      }
+      if (row.columnName() == null) {
+        last.hasExpression()[0] = true;
+      } else if (row.include()) {
+        last.include().add(row.columnName());
+      } else {
+        last.columns().add(row.columnName());
+      }
+    }
+
+    for (Group group : groups) {
+      IndexRow first = group.first();
+      if (first.primary()) {
+        continue;
+      }
+      if (group.hasExpression()[0]) {
+        LOGGER.warn(
+            "Index {}.{} is an expression index, which the schema model can't represent -"
+                + " skipping it",
+            first.tableName(),
+            first.indexName());
+        continue;
       }
 
-      keys.forEach(
-          (indexName, columns) -> {
-            if (indexName.contains(":::true")) {
-              table
-                  .getKeys()
-                  .add(
-                      new Key(
-                          KeyType.INDEX,
-                          columns.stream()
-                              .sorted()
-                              .map(it -> escapeColumnName(it.columnName()))
-                              .map(KeyColumn::new)
-                              .toList()));
-            } else {
-              if (showIncludeKey(table, indexName, columns)) {
-                table
-                    .getKeys()
-                    .add(
-                        new Key(
-                            KeyType.UNIQUE,
-                            columns.stream()
-                                .sorted()
-                                .map(it -> escapeColumnName(it.columnName()))
-                                .map(KeyColumn::new)
-                                .toList()));
-              }
-            }
-          });
+      var table = schema.getOptionalTable(first.tableName());
+      if (table.isEmpty()) {
+        continue;
+      }
+      // An index that merely backs an exclusion constraint is captured as a Constraint already.
+      if (table.get().getConstraints().stream()
+          .anyMatch(it -> it.getName().equals(first.indexName()))) {
+        continue;
+      }
 
-      if (table.getPrimaryKey() == null) {
-        var uniqueKeys =
-            table.getKeys().stream().filter(it -> it.getType() == KeyType.UNIQUE).toList();
+      var columns = group.columns().stream().map(KeyColumn::new).toList();
+      String include = group.include().isEmpty() ? null : String.join(",", group.include());
+      String filter = first.predicate();
 
-        if (uniqueKeys.size() == 1) {
-          table.getKeys().removeIf(it -> it.getType() == KeyType.UNIQUE);
-          table.getKeys().add(new Key(KeyType.PRIMARY, uniqueKeys.getFirst().getColumns()));
+      if (first.unique() && include == null && filter == null) {
+        table.get().getKeys().add(new Key(KeyType.UNIQUE, columns));
+      } else {
+        table
+            .get()
+            .getKeys()
+            .add(new Key(KeyType.INDEX, columns, false, false, first.unique(), include, filter));
+      }
+    }
+  }
+
+  /**
+   * A table with no primary key but exactly one unique key gets that key promoted to primary. Only
+   * done when every key column is already {@code NOT NULL}: promoting a nullable column would
+   * invent a {@code NOT NULL} the database doesn't have.
+   */
+  void promoteLoneUniqueKey(Table table) {
+    if (table.getPrimaryKey() != null) {
+      return;
+    }
+
+    var uniqueKeys = table.getKeys().stream().filter(it -> it.getType() == KeyType.UNIQUE).toList();
+    if (uniqueKeys.size() != 1) {
+      return;
+    }
+
+    Key unique = uniqueKeys.getFirst();
+    boolean allRequired =
+        unique.getColumns().stream()
+            .allMatch(
+                keyColumn ->
+                    table.getColumns().stream()
+                        .anyMatch(
+                            c ->
+                                c.getName().equalsIgnoreCase(keyColumn.getName())
+                                    && c.isRequired()));
+    if (allRequired) {
+      table.getKeys().remove(unique);
+      table.getKeys().add(new Key(KeyType.PRIMARY, unique.getColumns()));
+    }
+  }
+
+  /** The uuid generator the PostgreSQL SQL generator emits itself; exporting it would duplicate. */
+  private static final String GENERATED_UUID_FUNCTION = "generate_uuid";
+
+  /**
+   * Reads plain functions and procedures of {@code dbSchema} as {@code create or replace ...}
+   * statements. Aggregates and window functions are skipped ({@code pg_get_functiondef} rejects
+   * aggregates), as are functions owned by an extension.
+   */
+  private void populateRoutines(Schema schema, Connection connection, String dbSchema)
+      throws SQLException {
+    try (var statement =
+        connection.prepareStatement(
+            "SELECT p.proname::text AS name, p.prokind::text AS kind,"
+                + " pg_get_functiondef(p.oid) AS definition"
+                + " FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace"
+                + " WHERE n.nspname = ? AND p.prokind IN ('f', 'p')"
+                + " AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid"
+                + " AND d.deptype = 'e')"
+                + " ORDER BY p.proname, p.oid")) {
+      statement.setString(1, dbSchema);
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          String name = rs.getString("name");
+          String sql = trimRoutineDefinition(rs.getString("definition"));
+
+          if (rs.getString("kind").equals("p")) {
+            schema.addProcedure(new Procedure(dbSchema, name, DatabaseType.POSTGRESQL, sql));
+          } else if (name.equals(GENERATED_UUID_FUNCTION)) {
+            LOGGER.info(
+                "Function {} is created by the PostgreSQL generator itself - not exporting it",
+                name);
+          } else {
+            schema.addFunction(new Function(dbSchema, name, DatabaseType.POSTGRESQL, sql));
+          }
         }
       }
     }
   }
 
-  private String escapeColumnName(String columnName) {
-    return StringEscapeUtils.escapeXml11(columnName.replace("\n", ""));
-  }
-
-  private boolean showIncludeKey(Table table, String indexName, List<KeyDataColumn> columns) {
-    if (table.getConstraints().stream().anyMatch(it -> it.getName().equals(indexName))) {
-      return false;
+  static String trimRoutineDefinition(String definition) {
+    String sql = definition.strip();
+    while (sql.endsWith(";")) {
+      sql = sql.substring(0, sql.length() - 1).stripTrailing();
     }
-
-    if (table.getPrimaryKey() != null) {
-      List<String> pkColumnNames =
-          table.getPrimaryKey().getColumns().stream().map(KeyColumn::getName).toList();
-      List<String> keyColumnNames =
-          columns.stream().sorted().map(KeyDataColumn::columnName).toList();
-
-      return !pkColumnNames.equals(keyColumnNames);
-    }
-
-    return true;
+    return sql;
   }
 
   void populateImportedKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
@@ -274,6 +398,7 @@ public class SchemaReader {
       try (var resultSet = metaData.getImportedKeys(null, dbSchema, table.getName())) {
         while (resultSet.next()) {
           String fkName = resultSet.getString("FK_NAME");
+          String pkSchemaName = resultSet.getString("PKTABLE_SCHEM");
           String pkTableName = resultSet.getString("PKTABLE_NAME");
           String pkColumnName = resultSet.getString("PKCOLUMN_NAME");
           String fkTableName = resultSet.getString("FKTABLE_NAME");
@@ -289,6 +414,7 @@ public class SchemaReader {
           foreignKeys.add(
               new ForeignKeyData(
                   fkName,
+                  pkSchemaName,
                   pkTableName,
                   pkColumnName,
                   fkTableName,
@@ -299,8 +425,35 @@ public class SchemaReader {
         }
       }
 
-      table.getRelations().addAll(groupForeignKeys(foreignKeys));
+      table
+          .getRelations()
+          .addAll(groupForeignKeys(withoutCrossSchemaTargets(foreignKeys, dbSchema)));
     }
+  }
+
+  /**
+   * Drops foreign keys whose referenced table lives in a different schema. The model resolves
+   * relation targets by table name within a single schema, so such a relation could not be resolved
+   * when the generated XML is parsed back; it is skipped with a warning instead.
+   */
+  static List<ForeignKeyData> withoutCrossSchemaTargets(
+      List<ForeignKeyData> foreignKeys, String dbSchema) {
+    var kept = new ArrayList<ForeignKeyData>();
+    for (var foreignKey : foreignKeys) {
+      String pkSchema = foreignKey.pkSchemaName();
+      if (dbSchema != null && pkSchema != null && !pkSchema.equalsIgnoreCase(dbSchema)) {
+        LOGGER.warn(
+            "Foreign key {}.{} references {}.{} in another schema, which the schema model can't"
+                + " represent - skipping it",
+            foreignKey.fkTableName(),
+            foreignKey.fkName(),
+            pkSchema,
+            foreignKey.pkTableName());
+        continue;
+      }
+      kept.add(foreignKey);
+    }
+    return kept;
   }
 
   /**
@@ -345,14 +498,26 @@ public class SchemaReader {
     return relations;
   }
 
-  private static RelationType mapDeleteRule(String deleteRule) {
-    return switch (deleteRule) {
-      case "importedNoAction" -> RelationType.DONOTHING;
-      case "importedKeyCascade" -> RelationType.CASCADE;
-      case "importedKeyRestrict" -> RelationType.ENFORCE;
-      case "importedKeySetNull" -> RelationType.SETNULL;
-      case "importedKeySetDefault" -> RelationType.SETNULL;
-      default -> RelationType.DONOTHING;
+  /**
+   * Maps a JDBC {@code DELETE_RULE} to a {@link RelationType}. {@code SET DEFAULT} has no
+   * equivalent (mapping it to {@code SETNULL} would null the column instead of restoring its
+   * default), so it and any unknown rule are rejected. {@code NO ACTION} maps to {@code ENFORCE}:
+   * {@code DONOTHING} means no foreign key constraint is generated at all.
+   *
+   * <p>Real drivers report the rule as the {@link DatabaseMetaData} integer constant (as a string);
+   * the constant names are accepted too.
+   */
+  static RelationType mapDeleteRule(String deleteRule) {
+    String rule = deleteRule == null ? "" : deleteRule;
+    return switch (rule) {
+      case "importedKeyCascade", "0" -> RelationType.CASCADE;
+      case "importedKeyRestrict", "1", "importedNoAction", "3" -> RelationType.ENFORCE;
+      case "importedKeySetNull", "2" -> RelationType.SETNULL;
+      default ->
+          throw new IllegalStateException(
+              "unsupported ON DELETE rule '"
+                  + rule
+                  + "' (supported: CASCADE, SET NULL, RESTRICT, NO ACTION)");
     };
   }
 

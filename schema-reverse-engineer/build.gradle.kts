@@ -9,5 +9,6 @@ dependencies {
   implementation("org.slf4j:slf4j-api")
   implementation("org.postgresql:postgresql")
 
+  testImplementation(project(":schema-parser"))
   testImplementation(project(":test-platform-dependencies"))
 }
