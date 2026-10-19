@@ -1,5 +1,6 @@
 package com.stano.schema.gendiagram.impl;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.gendiagram.DiagramFormat;
@@ -229,5 +230,37 @@ class MermaidERDiagramGeneratorTest {
     assertTrue(text.contains("CHILD }o--|| PARENT : \"parent_id, tenant_id\""), text);
     assertTrue(text.contains("int parent_id FK"), text);
     assertTrue(text.contains("int tenant_id FK"), text);
+  }
+
+  @Test
+  @DisplayName("should mark a column that is both primary and foreign key as PK only")
+  void shouldMarkPrimaryAndForeignKeyColumnAsPkOnly() {
+    Schema schema = buildSchema();
+    Table parent = buildTable(schema, "PARENT");
+    parent.getColumns().add(new Column("id", ColumnType.INT, 0, true));
+    parent
+        .getKeys()
+        .add(new Key(KeyType.PRIMARY, new java.util.ArrayList<>(List.of(new KeyColumn("id")))));
+    Table child = buildTable(schema, "CHILD");
+    child.getColumns().add(new Column("parent_id", ColumnType.INT, 0, true));
+    child
+        .getKeys()
+        .add(
+            new Key(
+                KeyType.PRIMARY, new java.util.ArrayList<>(List.of(new KeyColumn("parent_id")))));
+    child
+        .getRelations()
+        .add(new Relation("CHILD", "parent_id", "PARENT", "id", RelationType.ENFORCE, false));
+
+    StringWriter output = new StringWriter();
+    PrintWriter writer = new PrintWriter(output);
+    new MermaidERDiagramGenerator(
+            new DiagramGeneratorOptions(schema, writer, DiagramFormat.MERMAID))
+        .generate();
+    writer.flush();
+    String text = output.toString();
+
+    assertTrue(text.contains("int parent_id PK\n"), text);
+    assertFalse(text.contains("PK FK"), text);
   }
 }

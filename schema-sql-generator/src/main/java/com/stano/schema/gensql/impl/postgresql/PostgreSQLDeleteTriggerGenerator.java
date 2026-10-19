@@ -2,9 +2,6 @@ package com.stano.schema.gensql.impl.postgresql;
 
 import com.stano.schema.gensql.impl.common.BaseGenerator;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
-import com.stano.schema.model.Aggregation;
-import com.stano.schema.model.AggregationColumn;
-import com.stano.schema.model.AggregationGroup;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
 import com.stano.schema.model.Relation;
@@ -163,7 +160,7 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
         .getAggregations()
         .forEach(
             aggregation -> {
-              sqlWriter.println(getAggregationDeletionText(aggregation, table));
+              sqlWriter.println(PostgreSQLAggregationSql.deleteAggregationSql(table, aggregation));
             });
   }
 
@@ -177,62 +174,5 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
         }
       }
     }
-  }
-
-  private String getAggregationDeletionText(Aggregation aggregation, Table table) {
-
-    return String.format(
-        "   update %s set %s\n   where %s;",
-        aggregation.getDestinationTable(),
-        createDeleteUpdateColumns(aggregation),
-        createDeleteAggGroup(aggregation));
-  }
-
-  private String createDeleteAggGroup(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      if (group.getSource().equals(group.getDestination())) {
-        s.append(aggregation.getDestinationTable())
-            .append(".")
-            .append(group.getSource())
-            .append(" = old.")
-            .append(group.getSource())
-            .append(" and ");
-      } else {
-        s.append(aggregation.getDestinationTable())
-            .append(".")
-            .append(group.getSource())
-            .append(" = old.")
-            .append(group.getDestination())
-            .append(" and ");
-      }
-    }
-
-    s.append(" ())");
-    return s.substring(0, (s.indexOf("()") - 6)).toString();
-  }
-
-  private String createDeleteUpdateColumns(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("\n      ")
-          .append(
-              column.getSourceColumn() != null && !column.getSourceColumn().trim().isEmpty()
-                  ? column.getSourceColumn()
-                  : "1")
-          .append(" = ")
-          .append(aggregation.getDestinationTable())
-          .append(".")
-          .append(column.getDestinationColumn())
-          .append(" - coalesce(old.")
-          .append(column.getDestinationColumn())
-          .append(",0),");
-    }
-    s.append("()");
-    return s.substring(0, (s.indexOf("()") - 1)).toString();
   }
 }

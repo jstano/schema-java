@@ -2,9 +2,6 @@ package com.stano.schema.gensql.impl.postgresql;
 
 import com.stano.schema.gensql.impl.common.BaseGenerator;
 import com.stano.schema.gensql.impl.common.SQLGenerator;
-import com.stano.schema.model.Aggregation;
-import com.stano.schema.model.AggregationColumn;
-import com.stano.schema.model.AggregationGroup;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
@@ -90,7 +87,7 @@ public class PostgreSQLUpdateTriggerGenerator extends BaseGenerator {
         .getAggregations()
         .forEach(
             aggregation -> {
-              sqlWriter.println(getAggregationSql(aggregation));
+              sqlWriter.println(PostgreSQLAggregationSql.upsertAggregationSql(table, aggregation));
               sqlWriter.println();
             });
 
@@ -135,168 +132,5 @@ public class PostgreSQLUpdateTriggerGenerator extends BaseGenerator {
         }
       }
     }
-  }
-
-  private String getAggregationSql(Aggregation aggregation) {
-
-    StringBuilder sql = new StringBuilder();
-
-    sql.append("   if tg_op = 'UPDATE' then\n")
-        .append(getAggregationUpdateSql(aggregation))
-        .append("\n   end if;\n\n")
-        .append(getAggregationInsertSql(aggregation));
-
-    //      sql.append("   if tg_op = 'INSERT' then\n")
-    //         .append("\n   else\n")
-    //         .append(getAggregationUpdateSql(aggregation))
-    //         .append("\n   end if;\n");
-
-    return sql.toString();
-  }
-
-  private String getAggregationInsertSql(Aggregation aggregation) {
-
-    return String.format(
-        "   insert into %s (%s)\n"
-            + "      values (%s)\n"
-            + "      on conflict (%s) do update set%s\n"
-            + "      where %s;",
-        aggregation.getDestinationTable(),
-        createInsertColumns(aggregation),
-        createInsertNewColumns(aggregation),
-        createUpsertOnConflictColumns(aggregation),
-        createUpdateColumnSettersInsertMode(aggregation),
-        createUpsertAggGroup(aggregation, false));
-  }
-
-  private String getAggregationUpdateSql(Aggregation aggregation) {
-
-    return String.format(
-        "      update %s set%s\n      where %s;",
-        aggregation.getDestinationTable(),
-        createUpdateColumnSettersUpdateMode(aggregation),
-        createUpsertAggGroup(aggregation, true));
-  }
-
-  private String createUpsertOnConflictColumns(Aggregation aggregation) {
-
-    return aggregation.getAggregationGroups().stream()
-        .map(AggregationGroup::getDestination)
-        .collect(Collectors.joining(","));
-  }
-
-  private String createUpdateColumnSettersInsertMode(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("\n         ")
-          .append(
-              column.getSourceColumn() != null && !column.getSourceColumn().trim().isEmpty()
-                  ? column.getSourceColumn()
-                  : "1")
-          .append(" = ")
-          .append("coalesce(")
-          .append(aggregation.getDestinationTable())
-          .append(".")
-          .append(column.getDestinationColumn())
-          .append(",0)")
-          .append(" + coalesce(new.")
-          .append(column.getDestinationColumn())
-          .append(",0),");
-    }
-    s.append("()");
-    return s.substring(0, (s.indexOf("()") - 1));
-  }
-
-  private String createUpdateColumnSettersUpdateMode(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("\n         ")
-          .append(
-              column.getSourceColumn() != null && !column.getSourceColumn().trim().isEmpty()
-                  ? column.getSourceColumn()
-                  : "1")
-          .append(" = ")
-          .append("coalesce(")
-          .append(aggregation.getDestinationTable())
-          .append(".")
-          .append(column.getDestinationColumn())
-          .append(",0)")
-          .append(" - coalesce(old.")
-          .append(column.getDestinationColumn())
-          .append(",0),");
-    }
-    s.append("()");
-    return s.substring(0, (s.indexOf("()") - 1));
-  }
-
-  private String createUpsertAggGroup(Aggregation aggregation, boolean useOldValues) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      if (group.getSource().equals(group.getDestination())) {
-        s.append(aggregation.getDestinationTable())
-            .append(".")
-            .append(group.getSource())
-            .append(useOldValues ? " = old." : " = new.")
-            .append(group.getSource())
-            .append(" and ");
-      } else {
-        s.append(aggregation.getDestinationTable())
-            .append(".")
-            .append(group.getSource())
-            .append(" = new.")
-            .append(group.getDestination())
-            .append(" and ");
-      }
-    }
-    s.append(" ())");
-    return s.substring(0, (s.indexOf("()") - 6));
-  }
-
-  private String createInsertColumns(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      if (group.getSource().equals(group.getDestination())) {
-        s.append(group.getSource()).append(", ");
-      } else {
-        s.append(group.getSource()).append(", ");
-      }
-    }
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append(
-              column.getSourceColumn() != null && !column.getSourceColumn().trim().isEmpty()
-                  ? column.getSourceColumn()
-                  : "1")
-          .append(", ");
-    }
-    s.append("()");
-    return s.substring(0, (s.indexOf("()") - 2));
-  }
-
-  private String createInsertNewColumns(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder();
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      if (group.getSource().equals(group.getDestination())) {
-        s.append("new.").append(group.getSource()).append(", ");
-      } else {
-        s.append("new.").append(group.getSource()).append(", ");
-      }
-    }
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("coalesce(new.").append(column.getDestinationColumn()).append(",0), ");
-    }
-    s.append("()");
-    return s.substring(0, (s.indexOf("()") - 2));
   }
 }

@@ -55,8 +55,7 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
       writer.print("    " + toMermaidType(column) + " " + column.getName());
       if (pkColumns.contains(column.getName())) {
         writer.print(" PK");
-      }
-      if (fkColumns.contains(column.getName())) {
+      } else if (fkColumns.contains(column.getName())) {
         writer.print(" FK");
       }
       writer.println();

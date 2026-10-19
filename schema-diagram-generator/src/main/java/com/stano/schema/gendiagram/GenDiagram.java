@@ -5,7 +5,6 @@ import com.stano.schema.parser.SchemaParser;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
-import java.net.URI;
 import java.net.URL;
 
 /**
@@ -45,13 +44,6 @@ public class GenDiagram {
     return new File(String.format("%s.%s", baseFilename, extension));
   }
 
-  private static String getSchemaFileName(String schemaFileName) {
-    if (schemaFileName.matches("^[a-zA-Z]:.*$")) {
-      return "/" + schemaFileName;
-    }
-    return schemaFileName;
-  }
-
   /**
    * Command-line entry point: parses an XML schema file and writes a generated diagram next to it.
    *
@@ -88,13 +80,13 @@ public class GenDiagram {
           "unknown diagram format '" + args[0] + "' (expected MERMAID or PLANTUML)");
     }
 
-    String schemaFilename = getSchemaFileName(args[1]);
+    String schemaFilename = args[1];
     if (schemaFilename.lastIndexOf('.') < 0) {
       throw new IllegalArgumentException(
           "schema filename '" + args[1] + "' must have a file extension");
     }
 
-    URL schemaURL = new URI("file://" + schemaFilename).toURL();
+    URL schemaURL = new File(schemaFilename).toURI().toURL();
     Schema schema = new SchemaParser().parseSchema(schemaURL);
 
     new GenDiagram()

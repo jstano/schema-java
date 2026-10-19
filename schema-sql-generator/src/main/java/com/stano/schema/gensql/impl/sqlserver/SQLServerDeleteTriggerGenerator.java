@@ -4,7 +4,6 @@ import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.model.Aggregation;
 import com.stano.schema.model.AggregationColumn;
 import com.stano.schema.model.AggregationGroup;
-import com.stano.schema.model.Column;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Table;
@@ -21,12 +20,6 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
   }
 
   void outputDeleteTrigger(Table table, List relations) {
-
-    // A table without a primary key can still carry an explicit <delete> trigger; the PK column
-    // is only a default for matching child rows, so it is optional.
-    List<String> pkColumns = table.getPrimaryKeyColumns();
-    Column column =
-        pkColumns == null || pkColumns.isEmpty() ? null : table.getColumn(pkColumns.get(0));
 
     String triggerName = table.getName().toLowerCase() + "_delete";
     String schemaName =
@@ -48,11 +41,11 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
     sqlWriter.println("if (select count(*) from deleted) > 0");
     sqlWriter.println("BEGIN");
 
-    outputDeleteEnforceStatements(relations, column);
+    outputDeleteEnforceStatements(relations);
 
-    outputDeleteSetNullStatements(relations, column);
+    outputDeleteSetNullStatements(relations);
 
-    outputDeleteCascadeStatements(relations, column);
+    outputDeleteCascadeStatements(relations);
 
     outputDeleteAggregationStatements(table);
 
@@ -86,13 +79,7 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
         .collect(Collectors.joining(" and "));
   }
 
-  /** The parent-side column matched against child rows: the PK column, else the relation's own. */
-  private String parentColumnName(Relation relation, Column primaryKeyColumn) {
-
-    return primaryKeyColumn != null ? primaryKeyColumn.getName() : relation.getFromColumnName();
-  }
-
-  private void outputDeleteEnforceStatements(List relations, Column column) {
+  private void outputDeleteEnforceStatements(List relations) {
 
     Iterator relationIterator = relations.iterator();
 
@@ -135,16 +122,16 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
                   + " where "
                   + relation.getToColumnName()
                   + " in (select "
-                  + parentColumnName(relation, column)
+                  + relation.getFromColumnName()
                   + " from deleted)) > 0");
           sqlWriter.println("   begin");
           sqlWriter.println(
               "      select @msg = 'The "
                   + getFullyQualifiedTableName(schema.getTable(relation.getFromTableName()))
                   + " ' + (select top 1 convert(varchar, "
-                  + parentColumnName(relation, column)
+                  + relation.getFromColumnName()
                   + ") from deleted where "
-                  + parentColumnName(relation, column)
+                  + relation.getFromColumnName()
                   + " in (select "
                   + relation.getToColumnName()
                   + " from "
@@ -162,7 +149,7 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
     }
   }
 
-  private void outputDeleteSetNullStatements(List relations, Column column) {
+  private void outputDeleteSetNullStatements(List relations) {
 
     Iterator relationIterator;
     relationIterator = relations.iterator();
@@ -197,14 +184,14 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
                   + " = null where "
                   + relation.getToColumnName()
                   + " in (select "
-                  + parentColumnName(relation, column)
+                  + relation.getFromColumnName()
                   + " from deleted);");
         }
       }
     }
   }
 
-  private void outputDeleteCascadeStatements(List relations, Column column) {
+  private void outputDeleteCascadeStatements(List relations) {
 
     Iterator relationIterator;
     relationIterator = relations.iterator();
@@ -231,7 +218,7 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
                   + " where "
                   + relation.getToColumnName()
                   + " in (select "
-                  + parentColumnName(relation, column)
+                  + relation.getFromColumnName()
                   + " from deleted);");
         }
       }
@@ -241,10 +228,8 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
   private void outputDeleteAggregationStatements(Table table) {
 
     if (!table.getAggregations().isEmpty()) {
-      sqlWriter.println(";");
-
       for (Aggregation aggregation : table.getAggregations()) {
-        sqlWriter.println(getAggregationDeletionText(aggregation));
+        sqlWriter.println(SQLServerAggregationSql.deleteAggregationSql(table, aggregation));
       }
     }
   }
@@ -268,101 +253,26 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
 
       while (aggregationIterator.hasNext()) {
         Aggregation aggregation = (Aggregation) aggregationIterator.next();
-        sqlWriter.println(getAggregationPrimingSP(aggregation, table.getName()));
+        sqlWriter.println(getAggregationPrimingSP(aggregation, table));
       }
 
       sqlWriter.println("end" + statementSeparator);
     }
   }
 
-  private String getAggregationDeletionText(Aggregation aggregation) {
+  private String getAggregationPrimingSP(Aggregation aggregation, Table table) {
 
-    return "  with "
-        + createSourceCTE(aggregation, "deleted", "D")
-        + ", "
-        + createDeleteAggregatedCTE(aggregation)
-        + createUpdateCTE(aggregation)
-        + ";";
-  }
-
-  private String createDeleteAggregatedCTE(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder("aggregated as (select ");
-    StringBuilder g = new StringBuilder();
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      switch (column.getAggregationType()) {
-        case SUM:
-          s.append("SUM(");
-          break;
-        case COUNT:
-          s.append("COUNT(*");
-          break;
-      }
-      if (column.getSourceColumn() != null && !column.getSourceColumn().trim().isEmpty()) {
-        s.append(column.getDestinationColumn());
-      }
-      s.append(") as ").append(column.getDestinationColumn()).append(", ");
-    }
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append(group.getDestination()).append(", ");
-    }
-
-    s.append(aggregation.getDateColumn()).append(" from D group by ");
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append(group.getDestination()).append(", ");
-    }
-
-    return s.append(aggregation.getDateColumn()).append(") ").toString();
-  }
-
-  private String createUpdateCTE(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder("update dest set ");
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("dest.")
-          .append(column.getDestinationColumn())
-          .append(" = dest.")
-          .append(column.getDestinationColumn())
-          .append(" - aggregated.")
-          .append(column.getDestinationColumn())
-          .append(", ");
-    }
-
-    s.setLength(s.length() - 2);
-    s.append(" from ")
-        .append(aggregation.getDestinationTable())
-        .append(" as dest join aggregated on ");
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append("dest.")
-          .append(group.getDestination())
-          .append(" = aggregated.")
-          .append(group.getDestination())
-          .append(" and ");
-    }
-
-    return s.append("dest.")
-        .append(aggregation.getDateColumn())
-        .append(" = aggregated.")
-        .append(aggregation.getDateColumn())
-        .toString();
-  }
-
-  private String getAggregationPrimingSP(Aggregation aggregation, String forTableName) {
-
+    String forTableName = table.getName();
+    String destination = SQLServerAggregationSql.destinationTable(table, aggregation);
     StringBuilder s = new StringBuilder("  delete from ");
 
-    s.append(aggregation.getDestinationTable())
+    s.append(destination)
         .append(";\n")
         .append("  with source as (select getDate() as ")
         .append(aggregation.getTimeStampColumn())
         .append(", ");
 
-    s.append(createAggregationFrequencyConversion(aggregation))
+    s.append(SQLServerAggregationSql.dateBucket(aggregation))
         .append(" as ")
         .append(aggregation.getDateColumn())
         .append(", ");
@@ -385,7 +295,7 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
     }
 
     s.append(")\n  insert into ")
-        .append(aggregation.getDestinationTable())
+        .append(destination)
         .append(" (")
         .append(aggregation.getTimeStampColumn())
         .append(", ")

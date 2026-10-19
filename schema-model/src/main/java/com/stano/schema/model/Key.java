@@ -77,7 +77,7 @@ public class Key {
     this.columns = List.copyOf(columns);
     this.cluster = false;
     this.compress = false;
-    this.unique = type == KeyType.UNIQUE;
+    this.unique = type != KeyType.INDEX;
     this.include = null;
     this.filter = null;
   }

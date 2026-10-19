@@ -66,25 +66,17 @@ public abstract class SQLGenerator {
           String.format("Generating SQL for '%s'", schema.getSchemaURL().toExternalForm()));
     }
 
-    if (schemaIsValid()) {
-      outputSQL();
-    }
+    validateSchema();
+    outputSQL();
   }
 
-  private boolean schemaIsValid() {
+  private void validateSchema() {
     List<String> errors = schema.validate();
 
     if (!errors.isEmpty()) {
-      if (logger.isErrorEnabled()) {
-        for (String error : errors) {
-          logger.error(error);
-        }
-      }
-
-      return false;
+      errors.forEach(logger::error);
+      throw new IllegalArgumentException("the schema is not valid: " + String.join("; ", errors));
     }
-
-    return true;
   }
 
   private void outputSQL() {

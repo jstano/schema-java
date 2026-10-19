@@ -2,9 +2,6 @@ package com.stano.schema.gensql.impl.sqlserver;
 
 import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.model.Aggregation;
-import com.stano.schema.model.AggregationColumn;
-import com.stano.schema.model.AggregationGroup;
-import com.stano.schema.model.AggregationType;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
@@ -82,10 +79,8 @@ class SQLServerUpdateTriggerGenerator extends SQLServerBaseTriggerGenerator {
     }
 
     if (!table.getAggregations().isEmpty()) {
-      sqlWriter.println(";");
-
       for (Aggregation aggregation : table.getAggregations()) {
-        sqlWriter.println(getAggregationUpdateText(aggregation));
+        sqlWriter.println(SQLServerAggregationSql.upsertAggregationSql(table, aggregation));
       }
     }
 
@@ -142,138 +137,5 @@ class SQLServerUpdateTriggerGenerator extends SQLServerBaseTriggerGenerator {
     sqlWriter.println("      end");
     sqlWriter.println("   end;");
     sqlWriter.println();
-  }
-
-  private String getAggregationUpdateText(Aggregation aggregation) {
-
-    return createIfUpdateForCTE(aggregation)
-        + "with "
-        + createSourceCTE(aggregation, "deleted", "D")
-        + ", "
-        + createSourceCTE(aggregation, "inserted", "I")
-        + ", "
-        + createBothCTE(aggregation)
-        + ", "
-        + createUpdateAggregatedCTE(aggregation)
-        + createMergeCTE(aggregation)
-        + ";";
-  }
-
-  private String createIfUpdateForCTE(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder("  if ");
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      if (!(column.getAggregationType() == AggregationType.COUNT)) {
-        s.append("update(").append(column.getSourceColumn()).append(") or ");
-      }
-    }
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      if (group.getSourceDerivedFrom() != null && !group.getSourceDerivedFrom().trim().isEmpty()) {
-        s.append("update(").append(group.getSourceDerivedFrom()).append(") or ");
-      } else {
-        s.append("update(").append(group.getSource()).append(") or ");
-      }
-    }
-
-    return s.append("update(").append(aggregation.getDateColumn()).append(") ").toString();
-  }
-
-  private String createUpdateAggregatedCTE(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder("aggregated as (select ");
-    StringBuilder g = new StringBuilder();
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      switch (column.getAggregationType()) {
-        case SUM:
-          s.append("SUM(");
-          break;
-        case COUNT:
-          s.append("SUM(");
-          break;
-      }
-      s.append("COALESCE(Inserted")
-          .append(column.getDestinationColumn())
-          .append(", 0) - coalesce(Deleted")
-          .append(column.getDestinationColumn())
-          .append(", 0)) as ")
-          .append(column.getDestinationColumn())
-          .append(", ");
-    }
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append(group.getDestination()).append(", ");
-    }
-
-    s.append(aggregation.getDateColumn()).append(" from BOTH group by ");
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append(group.getDestination()).append(", ");
-    }
-
-    return s.append(aggregation.getDateColumn()).append(") ").toString();
-  }
-
-  private String createMergeCTE(Aggregation aggregation) {
-
-    StringBuilder s = new StringBuilder("merge ");
-
-    s.append(aggregation.getDestinationTable())
-        .append(" as target using aggregated as source on (");
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append("target.")
-          .append(group.getDestination())
-          .append(" = source.")
-          .append(group.getDestination())
-          .append(" and ");
-    }
-
-    s.append("target.")
-        .append(aggregation.getDateColumn())
-        .append(" = source.")
-        .append(aggregation.getDateColumn())
-        .append(") when matched then update set ");
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("target.")
-          .append(column.getDestinationColumn())
-          .append(" = target.")
-          .append(column.getDestinationColumn())
-          .append(" + source.")
-          .append(column.getDestinationColumn())
-          .append(", ");
-    }
-
-    s.append(aggregation.getTimeStampColumn())
-        .append(" = getDate() when not matched then insert (")
-        .append(aggregation.getTimeStampColumn())
-        .append(", ")
-        .append(aggregation.getDateColumn())
-        .append(", ");
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append(group.getDestination()).append(", ");
-    }
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append(column.getDestinationColumn()).append(", ");
-    }
-
-    s.setLength(s.length() - 2);
-    s.append(") values (getDate(), Source.").append(aggregation.getDateColumn()).append(", ");
-
-    for (AggregationGroup group : aggregation.getAggregationGroups()) {
-      s.append("source.").append(group.getDestination()).append(", ");
-    }
-
-    for (AggregationColumn column : aggregation.getAggregationColumns()) {
-      s.append("source.").append(column.getDestinationColumn()).append(", ");
-    }
-
-    s.setLength(s.length() - 2);
-    return s.append(")").toString();
   }
 }

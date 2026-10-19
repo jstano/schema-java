@@ -8,16 +8,16 @@ Six "merged changes from schema-rs" commits ported Groups A-G from `../schema-rs
 ### Tier 1 - wrong output today
 - [x] **Parser check leak** (confirmed): `TableColumnContentHandler.startElement("column")` never resets `checkConstraint` (field line 21, set line 84), so one column's `<check>` leaks into later columns. Fixture `schema-parser-test-schema-postgres.sql:85-90` shows it. Fix: reset to null on each column; add a two-column parser test.
 - [x] **Postgres varchar drops user checks** (confirmed): `PostgreSQLColumnConstraintGenerator.getCheckConstraintSQL` returns only `length(x) <= n` for VARCHAR, never calling `super`. Fix: remove the branch (varchar(n) already enforces length) and update golden SQL fixtures.
-- [ ] (deferred, tracked separately) **M7 aggregation triggers still broken** (sync doc wrongly said "already in Java"): `PostgreSQLDeleteTriggerGenerator.java:182-232`, `SQLServerDeleteTriggerGenerator.java:288-310`; port Rust `7cb1c3d` (`postgres_aggregation_sql.rs`, `sqlserver_aggregation_sql.rs`). Largest item - confirm scope first.
+- [x] **M7 aggregation triggers** (sync doc wrongly said "already in Java"): rewrote Postgres (row-level `insert ... on conflict` / `update ... from`) and SQL Server (inserted/deleted CTEs + `merge`/`update`) aggregation SQL, ported from Rust `7cb1c3d`. New `AggregationSql` (common), `PostgreSQLAggregationSql`, `SQLServerAggregationSql`; old methods removed; 8 unit tests added. Postgres verified on postgres:17 (insert/update/bucket move/criteria flip/delete); SQL Server unit tests only. Not ported (same as Rust): the priming proc was only repointed at the new bucket/destination, and no validation that destination tables/columns exist.
 - [x] **Enum drop ordering** (diff engine, also a Rust bug): `SchemaDiffEngine.java:104-117` drops enum types before `modifyColumns`; Postgres uses `DROP TYPE ... CASCADE` (`PostgreSQLMigrationGenerator.java:677`), destroying columns. Fix: drop after modifyColumns, drop `CASCADE`.
 - [x] **SQL Server ModifyEnumType before new tables/columns exist** (`SQLServerMigrationGenerator.java:731-740`): only cycle CHECKs for columns present in the old schema.
 
 ### Tier 2 - medium
-- [ ] M3 tests missing: port the 4 Rust tests (user check + min/max, pre-wrapped check, boolean NATIVE, boolean YES_NO).
-- [ ] Invalid schema -> empty file, exit 0 (`SQLGenerator.schemaIsValid/generate`, `GenSQL`): make it throw like the other CLI paths.
+- [x] M3 tests missing: port the 4 Rust tests (user check + min/max, pre-wrapped check, boolean NATIVE, boolean YES_NO).
+- [x] Invalid schema -> empty file, exit 0 (`SQLGenerator.schemaIsValid/generate`, `GenSQL`): make it throw like the other CLI paths.
 - [ ] M11 missing-target check unreachable from XML: `SchemaParser.java:75` `buildReverseRelations()` throws before `validate()`.
-- [ ] `Key` 2-arg ctor leaves PRIMARY non-unique, so reverse-engineered PK != parsed PK in `SchemaDiffEngine.keysEqual`: use `type != INDEX`.
-- [ ] SQL Server delete trigger uses first PK column rather than `relation.getFromColumnName()` (`SQLServerDeleteTriggerGenerator.java:87-91`).
+- [x] `Key` 2-arg ctor leaves PRIMARY non-unique, so reverse-engineered PK != parsed PK in `SchemaDiffEngine.keysEqual`: use `type != INDEX`.
+- [x] SQL Server delete trigger uses first PK column rather than `relation.getFromColumnName()` (`SQLServerDeleteTriggerGenerator.java:87-91`).
 - [ ] Postgres `ModifyColumn` never cycles CHECK constraints (varchar widening leaves old check).
 - [ ] Sequence columns: false M25 halt on Postgres; invalid identity DDL on SQL Server (`PostgreSQL...:123`, `SQLServer...:138,206`).
 - [ ] SQL Server FK re-add happens per column (fails when both FK sides change type): defer to after all ModifyColumns (also Rust).
@@ -25,8 +25,8 @@ Six "merged changes from schema-rs" commits ported Groups A-G from `../schema-rs
 - [ ] H2 `ModifyColumn` drop/re-add: replace with `ALTER COLUMN ... SET DATA TYPE / SET [NOT] NULL / SET DEFAULT`.
 - [ ] Reverse engineer: fail fast with "PostgreSQL only" for other DBs (sync doc M35 skip is wrong); `populateConstraints` unscoped by schema and name-matching via `regclass` text; constraints written without `databaseType="postgresql"`; ARRAY element types beyond `_text/_int*`.
 - [ ] Reverse-engineer warnings go to slf4j with no binding: write to `System.err` (or add runtime binding).
-- [ ] CLI: `new URI("file://" + path)` breaks relative paths/spaces in `GenSQL`/`GenDiagram` - use `Path.toUri()`.
-- [ ] Mermaid emits `PK FK` for a column that is both (use PK only, like PlantUML).
+- [x] CLI: `new URI("file://" + path)` breaks relative paths/spaces in `GenSQL`/`GenDiagram` - use `Path.toUri()`.
+- [x] Mermaid emits `PK FK` for a column that is both (use PK only, like PlantUML).
 
 ### Tier 3 - low / hygiene
 Vacuous 2nd assertion in `CardinalityTest.compositeNeedsEveryColumnRequired` (cached `columnMap`); `Cardinality.of` case-sensitive column lookup; `ck_`/`df_` names not byte-limited; `Naming` needs `Locale.ROOT`; `stripCheckWrapper` mismatched parens; `generated` validation rejects names like `generated_total*2`; schema param used as LIKE pattern in `SchemaReader`; unknown CLI flags ignored; diagram identifier sanitizing; dependent views recreated too early; nullable->required has no guard; SQL Server `THROW` under sqlcmd; XML 1.0 vs `escapeXml11`; `PrintWriter.checkError()` unchecked.
@@ -43,4 +43,4 @@ M3 core logic, M8 Naming port, M9 view ordering, M2 SQL shapes, L4/L5, DONOTHING
 - Reverse-engineer and migration SQL: run against postgres:17 in docker as was done for the pg_index query; H2 changes can be tested in-process.
 
 ## Decision
-Tier 1 only, M7 tracked separately. Tier 1 (minus M7) done and `./gradlew build` green; Tiers 2-3 not started.
+Tier 1 only plus M7. Tier 1 and M7 done and `./gradlew build` green; Tiers 2-3 not started.

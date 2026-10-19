@@ -13,7 +13,6 @@ import com.stano.schema.parser.SchemaParser;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
-import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.Set;
@@ -321,14 +320,6 @@ public class GenSQL {
             "%s-%s.sql", baseFilename, databaseType.name().toLowerCase().replace("_", "")));
   }
 
-  private static String getSchemaFileName(String schemaFileName) {
-    if (schemaFileName.matches("^[a-zA-Z]:.*$")) {
-      return "/" + schemaFileName;
-    }
-
-    return schemaFileName;
-  }
-
   /**
    * Command-line entry point that parses an XML schema file and generates SQL DDL for one or more
    * target databases.
@@ -405,8 +396,8 @@ public class GenSQL {
 
   static void run(String[] args) throws Exception {
     String targetDatabases = args[0];
-    String schemaFilename = getSchemaFileName(args[1]);
-    URL schemaURL = new URI("file://" + schemaFilename).toURL();
+    String schemaFilename = args[1];
+    URL schemaURL = new File(schemaFilename).toURI().toURL();
     Schema schema = new SchemaParser().parseSchema(schemaURL);
     ForeignKeyMode foreignKeyMode = schema.getForeignKeyMode();
     BooleanMode booleanMode = schema.getBooleanMode();

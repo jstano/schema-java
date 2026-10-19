@@ -275,4 +275,17 @@ class GenSQLTest {
         Exception.class,
         () -> GenSQL.run(new String[] {"POSTGRESQL", tempDir.resolve("missing.xml").toString()}));
   }
+
+  @Test
+  @DisplayName("run accepts a schema path containing spaces")
+  void runAcceptsSchemaPathWithSpaces(@TempDir Path tempDir) throws Exception {
+    Path dir = java.nio.file.Files.createDirectory(tempDir.resolve("my schemas"));
+    Path copy = dir.resolve("test schema.xml");
+    java.nio.file.Files.copy(Path.of(testSchemaPath()), copy);
+    Path out = tempDir.resolve("out.sql");
+
+    GenSQL.run(new String[] {"POSTGRESQL", copy.toString(), "--output-file=" + out});
+
+    assertTrue(java.nio.file.Files.size(out) > 0);
+  }
 }
