@@ -105,4 +105,14 @@ class KeyTest {
     assertNull(table.getPrimaryKey());
     assertNull(table.getPrimaryKeyColumns());
   }
+
+  @Test
+  @DisplayName("the default constructor makes a UNIQUE key unique, and other types not")
+  void defaultConstructorUniqueFlagFollowsType() {
+    List<KeyColumn> columns = List.of(new KeyColumn("a"));
+
+    assertTrue(new Key(KeyType.UNIQUE, columns).isUnique());
+    assertFalse(new Key(KeyType.INDEX, columns).isUnique());
+    assertFalse(new Key(KeyType.PRIMARY, columns).isUnique());
+  }
 }

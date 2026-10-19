@@ -145,4 +145,21 @@ class PartialIndexParserTest {
 
     assertNull(table.getIndexes().get(0).getFilter());
   }
+
+  @Test
+  @DisplayName("<check> text on either side of an XML comment is joined, not truncated")
+  void checkTextAroundCommentIsJoined() throws Exception {
+    String tableXml =
+        "<table name=\"T\">\n"
+            + "  <columns>\n"
+            + "    <column name=\"a\" type=\"int\">\n"
+            + "      <check>a &gt; <!-- note -->0</check>\n"
+            + "    </column>\n"
+            + "  </columns>\n"
+            + "</table>";
+
+    Schema schema = parse(tableXml);
+
+    assertEquals("check(a > 0)", schema.getTable("T").getColumn("a").getCheckConstraint());
+  }
 }

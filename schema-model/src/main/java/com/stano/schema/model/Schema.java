@@ -6,10 +6,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.commons.collections4.map.CaseInsensitiveMap;
 
@@ -309,22 +311,69 @@ public class Schema {
         }
       }
 
+      Set<String> seenColumnNames = new HashSet<>();
+      for (Column column : table.getColumns()) {
+        if (!seenColumnNames.add(column.getName().toLowerCase())) {
+          errors.add(
+              String.format(
+                  "ERROR: table %s has duplicate column name '%s'; column names must be unique"
+                      + " within a table (comparison is case-insensitive)",
+                  table.getName(), column.getName()));
+        }
+      }
+
+      for (Key key : table.getKeys()) {
+        validateKeyColumns(errors, table, "a key", key);
+      }
+      for (Key key : table.getIndexes()) {
+        validateKeyColumns(errors, table, "an index", key);
+      }
+
       for (Relation relation : table.getRelations()) {
-        if (relation.getType() == RelationType.SETNULL) {
-          String fromTableName = relation.getFromTableName();
-          String fromColumnName = relation.getFromColumnName();
+        for (ColumnPair pair : relation.getColumnPairs()) {
+          String fromColumnName = pair.getFromColumnName();
+          Column fromColumn = table.getColumn(fromColumnName);
 
-          Table fromTable = getTable(fromTableName);
-
-          if (fromTable.getColumn(fromColumnName).isRequired()) {
+          if (fromColumn == null) {
+            errors.add(
+                String.format(
+                    "ERROR: %s.%s does not exist. The %s.%s relation refers to it as the source"
+                        + " column",
+                    table.getName(),
+                    fromColumnName,
+                    relation.getToTableName(),
+                    pair.getToColumnName()));
+          } else if (relation.getType() == RelationType.SETNULL && fromColumn.isRequired()) {
             errors.add(
                 String.format(
                     "ERROR: %s.%s is required. The %s.%s relation specifies setnull, which is not"
                         + " allowed",
-                    fromTableName,
+                    table.getName(),
                     fromColumnName,
                     relation.getToTableName(),
-                    relation.getToColumnName()));
+                    pair.getToColumnName()));
+          }
+        }
+
+        Optional<Table> target = getOptionalTable(relation.getToTableName());
+        if (target.isEmpty()) {
+          errors.add(
+              String.format(
+                  "ERROR: %s.%s has a relation to '%s' which does not exist",
+                  table.getName(), relation.getFromColumnName(), relation.getToTableName()));
+        } else {
+          for (ColumnPair pair : relation.getColumnPairs()) {
+            if (target.get().getColumn(pair.getToColumnName()) == null) {
+              errors.add(
+                  String.format(
+                      "ERROR: %s.%s has a relation to %s.%s, but %s has no column '%s'",
+                      table.getName(),
+                      pair.getFromColumnName(),
+                      relation.getToTableName(),
+                      pair.getToColumnName(),
+                      target.get().getName(),
+                      pair.getToColumnName()));
+            }
           }
         }
       }
@@ -368,6 +417,17 @@ public class Schema {
     }
 
     return errors;
+  }
+
+  private static void validateKeyColumns(List<String> errors, Table table, String kind, Key key) {
+    for (KeyColumn keyColumn : key.getColumns()) {
+      if (table.getColumn(keyColumn.getName()) == null) {
+        errors.add(
+            String.format(
+                "ERROR: table %s has %s on column '%s', which does not exist",
+                table.getName(), kind, keyColumn.getName()));
+      }
+    }
   }
 
   /** Sorts the schema's tables in place, alphabetically by table name. */

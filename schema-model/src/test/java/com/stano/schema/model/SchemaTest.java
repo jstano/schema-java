@@ -227,4 +227,123 @@ class SchemaTest {
     assertTrue(errors.get(0).contains("child_req.parent_id is required"));
     assertTrue(errors.get(0).contains("relation specifies setnull"));
   }
+
+  private static Table tableOf(Schema schema, String name, Column... columns) {
+    Table table = new Table(schema, "public", name, null, LockEscalation.AUTO, false);
+    table.getColumns().addAll(List.of(columns));
+    schema.addTable(table);
+    return table;
+  }
+
+  @Test
+  @DisplayName("validate reports duplicate column names, case-insensitively")
+  void validateReportsDuplicateColumnNames() {
+    Schema schema = new Schema(null);
+    tableOf(
+        schema,
+        "t",
+        new Column("Name", ColumnType.INT, 0, false),
+        new Column("name", ColumnType.INT, 0, false));
+
+    List<String> errors = schema.validate();
+
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("duplicate column name 'name'"), errors.get(0));
+  }
+
+  @Test
+  @DisplayName("validate reports key and index columns that are not on the table")
+  void validateReportsMissingKeyColumns() {
+    Schema schema = new Schema(null);
+    Table table = tableOf(schema, "t", new Column("id", ColumnType.INT, 0, true));
+    table.getKeys().add(new Key(KeyType.PRIMARY, List.of(new KeyColumn("Idd"))));
+    table.getIndexes().add(new Key(KeyType.INDEX, List.of(new KeyColumn("nope"))));
+
+    List<String> errors = schema.validate();
+
+    assertEquals(2, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("a key on column 'Idd'"), errors.get(0));
+    assertTrue(errors.get(1).contains("an index on column 'nope'"), errors.get(1));
+  }
+
+  @Test
+  @DisplayName("validate reports a missing source column for every relation type")
+  void validateReportsMissingSourceColumnForAnyRelationType() {
+    Schema schema = new Schema(null);
+    tableOf(schema, "parent", new Column("id", ColumnType.INT, 0, true));
+    Table child = tableOf(schema, "child", new Column("x", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(new Relation("child", "missing", "parent", "id", RelationType.CASCADE, false));
+
+    List<String> errors = schema.validate();
+
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("child.missing does not exist"), errors.get(0));
+  }
+
+  @Test
+  @DisplayName("validate checks every column pair of a composite relation, including SETNULL")
+  void validateChecksEveryCompositePair() {
+    Schema schema = new Schema(null);
+    tableOf(
+        schema,
+        "parent",
+        new Column("a", ColumnType.INT, 0, true),
+        new Column("b", ColumnType.INT, 0, true));
+    Table child =
+        tableOf(
+            schema,
+            "child",
+            new Column("a", ColumnType.INT, 0, true),
+            new Column("b", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(
+            Relation.composite(
+                "child",
+                "parent",
+                List.of(new ColumnPair("a", "a"), new ColumnPair("b", "b")),
+                RelationType.SETNULL,
+                false));
+
+    List<String> errors = schema.validate();
+
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("child.a is required"), errors.get(0));
+  }
+
+  @Test
+  @DisplayName("validate reports a relation whose target table or target column does not exist")
+  void validateReportsMissingRelationTarget() {
+    Schema schema = new Schema(null);
+    tableOf(schema, "parent", new Column("id", ColumnType.INT, 0, true));
+    Table child = tableOf(schema, "child", new Column("parent_id", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(new Relation("child", "parent_id", "parent", "idd", RelationType.CASCADE, false));
+    child
+        .getRelations()
+        .add(new Relation("child", "parent_id", "ghost", "id", RelationType.CASCADE, false));
+
+    List<String> errors = schema.validate();
+
+    assertEquals(2, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("parent has no column 'idd'"), errors.get(0));
+    assertTrue(errors.get(1).contains("relation to 'ghost' which does not exist"), errors.get(1));
+  }
+
+  @Test
+  @DisplayName("a well-formed schema still validates clean")
+  void validSchemaHasNoErrors() {
+    Schema schema = new Schema(null);
+    Table parent = tableOf(schema, "parent", new Column("id", ColumnType.INT, 0, true));
+    parent.getKeys().add(new Key(KeyType.PRIMARY, List.of(new KeyColumn("ID"))));
+    Table child = tableOf(schema, "child", new Column("parent_id", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(new Relation("child", "parent_id", "parent", "id", RelationType.SETNULL, false));
+
+    assertTrue(schema.validate().isEmpty(), schema.validate().toString());
+  }
 }

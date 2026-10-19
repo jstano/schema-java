@@ -66,8 +66,8 @@ public class Key {
   }
 
   /**
-   * Creates a key with default options: not clustered, not compressed, not unique, and no included
-   * columns.
+   * Creates a key with default options: not clustered, not compressed, and no included columns. A
+   * {@link KeyType#UNIQUE} key is unique; other types are not.
    *
    * @param type whether this is a primary key, unique key, or index
    * @param columns the ordered columns making up the key
@@ -77,7 +77,7 @@ public class Key {
     this.columns = List.copyOf(columns);
     this.cluster = false;
     this.compress = false;
-    this.unique = false;
+    this.unique = type == KeyType.UNIQUE;
     this.include = null;
     this.filter = null;
   }
