@@ -309,7 +309,7 @@ class H2MigrationGeneratorTest {
     ChangeSet changeSet = new ChangeSet();
     changeSet.addChange(
         new AddConstraintChange(
-            "orders", new Constraint("ck_orders_total", "total >= 0", DatabaseType.H2)));
+            "orders", new Constraint("ck_orders_total", "check (total >= 0)", DatabaseType.H2)));
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
@@ -319,7 +319,7 @@ class H2MigrationGeneratorTest {
 
     String sql = sw.toString();
     assertTrue(
-        sql.contains("ADD CONSTRAINT IF NOT EXISTS ck_orders_total CHECK (total >= 0)"),
+        sql.contains("ADD CONSTRAINT IF NOT EXISTS ck_orders_total check (total >= 0)"),
         "got: " + sql);
   }
 

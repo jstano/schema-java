@@ -27,6 +27,7 @@ import com.stano.schema.gensql.impl.common.SQLGeneratorFactory;
 import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ForeignKeyMode;
+import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
 import java.io.PrintWriter;
 import java.io.Writer;
@@ -117,9 +118,14 @@ public abstract class MigrationGenerator {
         generateDropConstraint(c);
       }
     } else if (change instanceof AddRelationChange c) {
-      generateAddRelation(c);
+      // DONOTHING relations have no foreign key constraint to add (or, below, to drop).
+      if (c.getRelation().createsForeignKeyConstraint()) {
+        generateAddRelation(c);
+      }
     } else if (change instanceof DropRelationChange c) {
-      generateDropRelation(c);
+      if (c.getRelation().createsForeignKeyConstraint()) {
+        generateDropRelation(c);
+      }
     } else if (change instanceof AddFunctionChange c) {
       generateAddFunction(c);
     } else if (change instanceof DropFunctionChange c) {
@@ -283,6 +289,64 @@ public abstract class MigrationGenerator {
    */
   protected abstract void generateDropView(DropViewChange change);
 
+  /**
+   * Returns the {@code ON DELETE} clause (with a leading space) for a relation, or an empty string
+   * for {@code ENFORCE}, which is the database default of {@code NO ACTION}. {@code DONOTHING}
+   * relations get no foreign key at all (see {@link Relation#createsForeignKeyConstraint()}), so
+   * callers skip them before asking.
+   */
+  protected static String onDeleteClause(Relation relation) {
+    return switch (relation.getType()) {
+      case CASCADE -> " ON DELETE CASCADE";
+      case SETNULL -> " ON DELETE SET NULL";
+      case ENFORCE, DONOTHING -> "";
+    };
+  }
+
+  /**
+   * Writes the comment block that explains why a migration halts when a required column is added
+   * with no default: existing rows have no value for it, so the developer must either backfill or
+   * confirm the table is empty by deleting the halt statement that follows.
+   */
+  protected final void writeBackfillWarning(String tableName, String columnName) {
+    PrintWriter w = options.getWriter();
+    w.println(
+        "-- WARNING: '"
+            + columnName
+            + "' is being made NOT NULL with no default - existing rows have no value to backfill"
+            + " it with automatically.");
+    w.println(
+        "--   1. If '"
+            + tableName
+            + "' has rows, add UPDATE statements above this line to give '"
+            + columnName
+            + "' a value, then delete the block below, OR");
+    w.println("--   2. If '" + tableName + "' is empty, delete the block below to confirm that.");
+  }
+
+  /**
+   * Writes the comment block that explains why a migration halts when a column's {@code generated}
+   * expression changes (or it switches between plain and generated): there is no portable {@code
+   * ALTER COLUMN} for it, and dropping and re-adding a plain column would lose data.
+   */
+  protected final void writeGeneratedChangeWarning(String tableName, String columnName) {
+    PrintWriter w = options.getWriter();
+    w.println(
+        "-- WARNING: the generated expression of '"
+            + tableName
+            + "."
+            + columnName
+            + "' changed (or it switched between plain and generated).");
+    w.println(
+        "--   This cannot be altered in place. Drop and re-add the column manually (back up its"
+            + " data first if it was a plain column), then delete the statement below.");
+  }
+
+  /** Returns whether a {@code ModifyColumn} changes the column's {@code generated} expression. */
+  protected static boolean generatedChanged(Column oldColumn, Column newColumn) {
+    return !java.util.Objects.equals(oldColumn.getGenerated(), newColumn.getGenerated());
+  }
+
   private ColumnConstraintGenerator columnConstraintGenerator;
 
   /**
@@ -314,7 +378,7 @@ public abstract class MigrationGenerator {
    * @return the constraint name
    */
   protected final String getCheckConstraintName(String tableName, String columnName) {
-    return getColumnConstraintGenerator().getConstraintName(tableName, columnName);
+    return ColumnConstraintGenerator.constraintName(tableName, columnName);
   }
 
   /**

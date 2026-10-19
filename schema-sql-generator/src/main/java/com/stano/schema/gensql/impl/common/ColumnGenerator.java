@@ -102,7 +102,7 @@ public abstract class ColumnGenerator extends BaseGenerator {
   protected String createDefaultConstraint(Table table, Column column, String defaultValue) {
     return String.format(
         "constraint %s default %s",
-        buildDefaultConstraintName(table.getName(), column.getName()), defaultValue);
+        defaultConstraintName(table.getName(), column.getName()), defaultValue);
   }
 
   protected String convertBooleanDefaultConstraint(boolean defaultValue) {
@@ -117,7 +117,12 @@ public abstract class ColumnGenerator extends BaseGenerator {
     return defaultValue ? "true" : "false";
   }
 
-  private String buildDefaultConstraintName(String tableName, String columnName) {
+  /**
+   * Builds the {@code df_<table>_<column>_<hash>} name this generator gives a column's default
+   * constraint, so callers outside a full {@code CREATE TABLE} generation (the SQL Server migration
+   * generator) can create and drop the exact same constraint.
+   */
+  public static String defaultConstraintName(String tableName, String columnName) {
     tableName = tableName.toLowerCase();
     columnName = columnName.toLowerCase();
 

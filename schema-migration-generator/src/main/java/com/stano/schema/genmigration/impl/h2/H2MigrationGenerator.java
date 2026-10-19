@@ -92,14 +92,20 @@ public class H2MigrationGenerator extends MigrationGenerator {
         .append(col.getName())
         .append(" ")
         .append(mapper.toSqlType(col));
-    if (col.getDefaultConstraint() != null) {
+    if (col.getGenerated() != null) {
+      // Computed on read, so H2 has no STORED keyword; generated columns take no default.
+      sb.append(" GENERATED ALWAYS AS (").append(col.getGenerated()).append(")");
+      if (col.isRequired()) {
+        sb.append(" NOT NULL");
+      }
+    } else if (col.getDefaultConstraint() != null) {
       sb.append(" DEFAULT ").append(col.getDefaultConstraint());
     }
     w.println(sb.toString());
     w.print(options.getStatementSeparator());
     w.println();
 
-    if (col.isRequired()) {
+    if (col.isRequired() && col.getGenerated() == null) {
       w.println(
           "ALTER TABLE "
               + change.getTableName()
@@ -244,9 +250,8 @@ public class H2MigrationGenerator extends MigrationGenerator {
             + change.getTableName()
             + " ADD CONSTRAINT IF NOT EXISTS "
             + change.getConstraint().getName()
-            + " CHECK ("
-            + change.getConstraint().getSql()
-            + ")");
+            + " "
+            + change.getConstraint().getSql());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -269,10 +274,7 @@ public class H2MigrationGenerator extends MigrationGenerator {
     String fkName =
         Naming.foreignKeyName(
             DatabaseType.H2, change.getRelation().getFromTableName(), change.getOrdinal());
-    String onDelete =
-        change.getRelation().getType() == com.stano.schema.model.RelationType.CASCADE
-            ? " ON DELETE CASCADE"
-            : "";
+    String onDelete = onDeleteClause(change.getRelation());
     w.println(
         "ALTER TABLE "
             + change.getRelation().getFromTableName()

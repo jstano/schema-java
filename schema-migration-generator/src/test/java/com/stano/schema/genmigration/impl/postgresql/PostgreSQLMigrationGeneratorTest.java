@@ -523,7 +523,8 @@ class PostgreSQLMigrationGeneratorTest {
     ChangeSet changeSet = new ChangeSet();
     changeSet.addChange(
         new AddConstraintChange(
-            "orders", new Constraint("ck_orders_total", "total >= 0", DatabaseType.POSTGRESQL)));
+            "orders",
+            new Constraint("ck_orders_total", "check (total >= 0)", DatabaseType.POSTGRESQL)));
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
@@ -538,7 +539,7 @@ class PostgreSQLMigrationGeneratorTest {
         () -> assertTrue(sql.contains("conname = 'ck_orders_total'"), "got: " + sql),
         () ->
             assertTrue(
-                sql.contains("ADD CONSTRAINT ck_orders_total CHECK (total >= 0)"), "got: " + sql));
+                sql.contains("ADD CONSTRAINT ck_orders_total check (total >= 0)"), "got: " + sql));
   }
 
   @Test
@@ -564,7 +565,8 @@ class PostgreSQLMigrationGeneratorTest {
     ChangeSet changeSet = new ChangeSet();
     changeSet.addChange(
         new AddConstraintChange(
-            "orders", new Constraint("ck_orders_total", "total >= 0", DatabaseType.SQL_SERVER)));
+            "orders",
+            new Constraint("ck_orders_total", "check (total >= 0)", DatabaseType.SQL_SERVER)));
     changeSet.addChange(new DropConstraintChange("orders", "ck_old", DatabaseType.SQL_SERVER));
     changeSet.addChange(
         new com.stano.schema.diff.change.AddViewChange(

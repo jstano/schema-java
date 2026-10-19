@@ -21,15 +21,24 @@ import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGenerator;
 import com.stano.schema.genmigration.impl.common.MigrationGeneratorOptions;
+import com.stano.schema.gensql.impl.common.ColumnGenerator;
 import com.stano.schema.gensql.impl.common.ColumnTypeMapper;
 import com.stano.schema.gensql.impl.sqlserver.SQLServerColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
+import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.Key;
+import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Naming;
+import com.stano.schema.model.Relation;
+import com.stano.schema.model.Schema;
+import com.stano.schema.model.Table;
 import java.io.PrintWriter;
-import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class SQLServerMigrationGenerator extends MigrationGenerator {
@@ -105,57 +114,153 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
   protected void generateAddColumn(AddColumnChange change) {
     PrintWriter w = options.getWriter();
     Column col = change.getColumn();
-    StringBuilder sb = new StringBuilder();
-    sb.append("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('")
-        .append(change.getTableName())
-        .append("') AND name = '")
-        .append(col.getName())
-        .append("') ALTER TABLE ")
-        .append(change.getTableName())
-        .append(" ADD ")
-        .append(col.getName())
-        .append(" ")
-        .append(mapper.toSqlType(col));
-    if (col.getDefaultConstraint() != null) {
-      sb.append(" DEFAULT ").append(col.getDefaultConstraint());
+    String table = change.getTableName();
+    String missing = columnMissingCondition(table, col.getName());
+
+    if (col.getGenerated() != null) {
+      // Computed columns declare no type, take no default, and are always calculated for existing
+      // rows - nothing to backfill.
+      w.println(
+          "IF "
+              + missing
+              + " ALTER TABLE "
+              + table
+              + " ADD "
+              + col.getName()
+              + " AS ("
+              + col.getGenerated()
+              + ") PERSISTED"
+              + (col.isRequired() ? " NOT NULL" : ""));
+      w.print(options.getStatementSeparator());
+      w.println();
+    } else if (col.isRequired() && col.getDefaultConstraint() == null) {
+      writeNotNullColumnWithBackfillGuard(table, col);
+    } else {
+      StringBuilder sb = new StringBuilder();
+      sb.append("IF ")
+          .append(missing)
+          .append(" ALTER TABLE ")
+          .append(table)
+          .append(" ADD ")
+          .append(col.getName())
+          .append(" ")
+          .append(mapper.toSqlType(col))
+          .append(col.isRequired() ? " NOT NULL" : " NULL");
+      if (col.getDefaultConstraint() != null) {
+        sb.append(" CONSTRAINT ")
+            .append(ColumnGenerator.defaultConstraintName(table, col.getName()))
+            .append(" DEFAULT ")
+            .append(col.getDefaultConstraint());
+      }
+      w.println(sb.toString());
+      w.print(options.getStatementSeparator());
+      w.println();
     }
-    w.println(sb.toString());
+
+    writeAddCheckConstraint(table, col);
+  }
+
+  private static String columnMissingCondition(String table, String column) {
+    return "NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('"
+        + table
+        + "') AND name = '"
+        + column
+        + "')";
+  }
+
+  /**
+   * A required column with no default has no value to backfill existing rows with, so adding it
+   * {@code NOT NULL} would fail the moment the table has any rows. Adds the column nullable, halts
+   * unconditionally so the developer must either backfill or confirm the table is empty (never a
+   * silent pass-through), then tightens it to {@code NOT NULL} - reachable only once the halt has
+   * been deleted.
+   */
+  private void writeNotNullColumnWithBackfillGuard(String table, Column col) {
+    PrintWriter w = options.getWriter();
+    String type = mapper.toSqlType(col);
+    w.println(
+        "IF "
+            + columnMissingCondition(table, col.getName())
+            + " ALTER TABLE "
+            + table
+            + " ADD "
+            + col.getName()
+            + " "
+            + type
+            + " NULL");
     w.print(options.getStatementSeparator());
     w.println();
 
-    if (col.isRequired()) {
-      w.println(
-          "ALTER TABLE "
-              + change.getTableName()
-              + " ALTER COLUMN "
-              + col.getName()
-              + " "
-              + mapper.toSqlType(col)
-              + " NOT NULL");
-      w.print(options.getStatementSeparator());
-      w.println();
-    }
+    writeBackfillWarning(table, col.getName());
+    w.println(
+        "THROW 50000, 'Migration halted: "
+            + table
+            + " has no value for "
+            + col.getName()
+            + " - see comment above.', 1");
+    w.print(options.getStatementSeparator());
+    w.println();
 
+    w.println("ALTER TABLE " + table + " ALTER COLUMN " + col.getName() + " " + type + " NOT NULL");
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  private void writeAddCheckConstraint(String table, Column col) {
     String checkSql = getCheckConstraintSql(col);
-    if (checkSql != null) {
-      String constraintName = getCheckConstraintName(change.getTableName(), col.getName());
-      w.println(
-          "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = '"
-              + constraintName
-              + "') ALTER TABLE "
-              + change.getTableName()
-              + " ADD CONSTRAINT "
-              + constraintName
-              + " "
-              + checkSql);
-      w.print(options.getStatementSeparator());
-      w.println();
+    if (checkSql == null) {
+      return;
     }
+    PrintWriter w = options.getWriter();
+    String constraintName = getCheckConstraintName(table, col.getName());
+    w.println(
+        "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = '"
+            + constraintName
+            + "') ALTER TABLE "
+            + table
+            + " ADD CONSTRAINT "
+            + constraintName
+            + " "
+            + checkSql);
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  private void writeDropDefaultConstraint(String table, String column) {
+    PrintWriter w = options.getWriter();
+    String name = ColumnGenerator.defaultConstraintName(table, column);
+    w.println(
+        "IF EXISTS (SELECT 1 FROM sys.default_constraints WHERE name = '"
+            + name
+            + "') ALTER TABLE "
+            + table
+            + " DROP CONSTRAINT "
+            + name);
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  private void writeDropCheckConstraint(String table, String column) {
+    PrintWriter w = options.getWriter();
+    String name = getCheckConstraintName(table, column);
+    w.println(
+        "IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = '"
+            + name
+            + "') ALTER TABLE "
+            + table
+            + " DROP CONSTRAINT "
+            + name);
+    w.print(options.getStatementSeparator());
+    w.println();
   }
 
   @Override
   protected void generateDropColumn(DropColumnChange change) {
     PrintWriter w = options.getWriter();
+    // DROP COLUMN fails while a DEFAULT or CHECK constraint still references the column. Both are
+    // dropped by their computed (create-path) names first, guarded so it is a no-op when absent.
+    writeDropDefaultConstraint(change.getTableName(), change.getColumnName());
+    writeDropCheckConstraint(change.getTableName(), change.getColumnName());
     w.println(
         "IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('"
             + change.getTableName()
@@ -174,40 +279,164 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     PrintWriter w = options.getWriter();
     Column oldCol = change.getOldColumn();
     Column newCol = change.getNewColumn();
-    StringBuilder sb = new StringBuilder();
-    sb.append("ALTER TABLE ")
-        .append(change.getTableName())
-        .append(" ALTER COLUMN ")
-        .append(newCol.getName())
-        .append(" ")
-        .append(mapper.toSqlType(newCol));
-    if (newCol.isRequired()) {
-      sb.append(" NOT NULL");
+    String table = change.getTableName();
+
+    if (generatedChanged(oldCol, newCol)) {
+      writeGeneratedChangeWarning(table, newCol.getName());
+      w.println(
+          "THROW 50000, 'Migration halted: generated column "
+              + table
+              + "."
+              + newCol.getName()
+              + " changed - see comment above.', 1");
+      w.print(options.getStatementSeparator());
+      w.println();
     }
-    w.println(sb.toString());
+
+    // SQL Server refuses ALTER COLUMN outright while the column participates in a PRIMARY
+    // KEY/UNIQUE constraint, a plain index, or a foreign key (either as the FK's own column, or as
+    // the column another table's FK references). Find and drop them first, guarded, in dependency
+    // order (a relation can depend on a unique/PK index, so it comes off first and goes back last).
+    List<AddKeyChange> blockingKeys = dependentKeys(table, oldCol.getName());
+    List<AddRelationChange> blockingRelations = dependentRelations(table, oldCol.getName());
+
+    for (AddRelationChange relation : blockingRelations) {
+      generateDropRelation(new DropRelationChange(relation.getRelation(), relation.getOrdinal()));
+    }
+    for (AddKeyChange key : blockingKeys) {
+      generateDropKey(new DropKeyChange(key.getTableName(), key.getKey(), key.getOrdinal()));
+    }
+
+    // ALTER COLUMN also refuses while a DEFAULT or CHECK constraint from the old definition still
+    // references the column, so drop both first (keyed off the old name; this is not a rename).
+    writeDropDefaultConstraint(table, oldCol.getName());
+    writeDropCheckConstraint(table, oldCol.getName());
+
+    // IDENTITY can only be set when a column is created - ALTER COLUMN rejects an identity clause
+    // outright. Strip it to the bare integer type; this can still change nullability, but cannot
+    // retarget an identity column's underlying type - that needs a manual column rebuild, so flag
+    // it instead of emitting DDL that would either fail or silently do the wrong thing.
+    boolean identity =
+        newCol.getType() == ColumnType.SEQUENCE || newCol.getType() == ColumnType.LONGSEQUENCE;
+    if (identity) {
+      w.println(
+          "-- NOTE: '"
+              + newCol.getName()
+              + "' is an identity column - IDENTITY cannot be changed via ALTER COLUMN. If its"
+              + " underlying type needs to change too, this requires a manual column rebuild.");
+    }
+    String type =
+        identity
+            ? (newCol.getType() == ColumnType.SEQUENCE ? "integer" : "bigint")
+            : mapper.toSqlType(newCol);
+    w.println(
+        "ALTER TABLE "
+            + table
+            + " ALTER COLUMN "
+            + newCol.getName()
+            + " "
+            + type
+            + (newCol.isRequired() ? " NOT NULL" : " NULL"));
     w.print(options.getStatementSeparator());
     w.println();
 
-    if (!Objects.equals(oldCol.getDefaultConstraint(), newCol.getDefaultConstraint())) {
-      if (newCol.getDefaultConstraint() != null) {
-        w.println(
-            "ALTER TABLE "
-                + change.getTableName()
-                + " ADD DEFAULT "
-                + newCol.getDefaultConstraint()
-                + " FOR "
-                + newCol.getName());
-        w.print(options.getStatementSeparator());
-        w.println();
-      } else {
-        w.println(
-            "-- TODO: DROP DEFAULT constraint on "
-                + change.getTableName()
-                + "."
-                + newCol.getName());
-        w.println();
+    if (newCol.getDefaultConstraint() != null) {
+      String name = ColumnGenerator.defaultConstraintName(table, newCol.getName());
+      w.println(
+          "IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE name = '"
+              + name
+              + "') ALTER TABLE "
+              + table
+              + " ADD CONSTRAINT "
+              + name
+              + " DEFAULT "
+              + newCol.getDefaultConstraint()
+              + " FOR "
+              + newCol.getName());
+      w.print(options.getStatementSeparator());
+      w.println();
+    }
+    writeAddCheckConstraint(table, newCol);
+
+    for (AddKeyChange key : blockingKeys) {
+      generateAddKey(key);
+    }
+    for (AddRelationChange relation : blockingRelations) {
+      generateAddRelation(relation);
+    }
+  }
+
+  /**
+   * Every key and index of {@code tableName} that contains {@code columnName}, paired with the
+   * ordinal the create path numbers it with (unique keys among unique keys, indexes among indexes),
+   * so the generated name matches the existing object.
+   */
+  private List<AddKeyChange> dependentKeys(String tableName, String columnName) {
+    List<AddKeyChange> found = new ArrayList<>();
+    Schema schema = options.getSchema();
+    if (schema == null) {
+      return found;
+    }
+    Optional<Table> table = schema.getOptionalTable(tableName);
+    if (table.isEmpty()) {
+      return found;
+    }
+
+    int uniqueOrdinal = 0;
+    for (Key key : table.get().getKeys()) {
+      if (key.getType() == KeyType.UNIQUE) {
+        uniqueOrdinal++;
+      }
+      if (key.containsColumn(columnName)) {
+        found.add(new AddKeyChange(tableName, key, uniqueOrdinal));
       }
     }
+
+    int indexOrdinal = 0;
+    for (Key key : table.get().getIndexes()) {
+      if (key.getType() == KeyType.INDEX) {
+        indexOrdinal++;
+      }
+      if (key.containsColumn(columnName)) {
+        found.add(new AddKeyChange(tableName, key, indexOrdinal));
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Every foreign key in the schema that touches {@code tableName.columnName} - either as the FK's
+   * own column or as the column another table's FK references - paired with the relation's 1-based
+   * ordinal among its owning table's relations, so the generated name matches the existing
+   * constraint. SQL Server blocks ALTER COLUMN for both roles.
+   */
+  private List<AddRelationChange> dependentRelations(String tableName, String columnName) {
+    List<AddRelationChange> found = new ArrayList<>();
+    Schema schema = options.getSchema();
+    if (schema == null) {
+      return found;
+    }
+
+    for (Table owner : schema.getTables()) {
+      for (int i = 0; i < owner.getRelations().size(); i++) {
+        Relation relation = owner.getRelations().get(i);
+        if (!relation.createsForeignKeyConstraint()) {
+          continue;
+        }
+        boolean fromMatches =
+            owner.getName().equalsIgnoreCase(tableName)
+                && relation.getColumnPairs().stream()
+                    .anyMatch(p -> p.getFromColumnName().equalsIgnoreCase(columnName));
+        boolean toMatches =
+            relation.getToTableName().equalsIgnoreCase(tableName)
+                && relation.getColumnPairs().stream()
+                    .anyMatch(p -> p.getToColumnName().equalsIgnoreCase(columnName));
+        if (fromMatches || toMatches) {
+          found.add(new AddRelationChange(relation, i + 1));
+        }
+      }
+    }
+    return found;
   }
 
   @Override
@@ -338,9 +567,8 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
             + change.getTableName()
             + " ADD CONSTRAINT "
             + change.getConstraint().getName()
-            + " CHECK ("
-            + change.getConstraint().getSql()
-            + ")");
+            + " "
+            + change.getConstraint().getSql());
     w.print(options.getStatementSeparator());
     w.println();
   }
@@ -367,10 +595,7 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     String fkName =
         Naming.foreignKeyName(
             DatabaseType.SQL_SERVER, change.getRelation().getFromTableName(), change.getOrdinal());
-    String onDelete =
-        change.getRelation().getType() == com.stano.schema.model.RelationType.CASCADE
-            ? " ON DELETE CASCADE"
-            : "";
+    String onDelete = onDeleteClause(change.getRelation());
     w.println(
         "IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = '"
             + fkName

@@ -102,6 +102,11 @@ public class ColumnConstraintGenerator extends BaseGenerator {
    * schema-migration-generator's {@code AddColumn} handling) can produce the exact same name.
    */
   public String getConstraintName(String tableName, String columnName) {
+    return constraintName(tableName, columnName);
+  }
+
+  /** Static form of {@link #getConstraintName}; it needs no schema, so it works without one. */
+  public static String constraintName(String tableName, String columnName) {
     tableName = tableName.toLowerCase();
     columnName = columnName.toLowerCase();
 

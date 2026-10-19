@@ -418,7 +418,8 @@ class SQLServerMigrationGeneratorTest {
     ChangeSet changeSet = new ChangeSet();
     changeSet.addChange(
         new AddConstraintChange(
-            "orders", new Constraint("ck_orders_total", "total >= 0", DatabaseType.SQL_SERVER)));
+            "orders",
+            new Constraint("ck_orders_total", "check (total >= 0)", DatabaseType.SQL_SERVER)));
 
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
