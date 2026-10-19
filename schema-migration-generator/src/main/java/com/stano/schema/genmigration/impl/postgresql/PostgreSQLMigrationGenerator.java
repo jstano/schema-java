@@ -735,6 +735,13 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
       w.println();
     }
 
+    if (!addedEnumValues(change).isEmpty()) {
+      w.println(
+          "-- NOTE: Postgres cannot use a newly added enum value in the same transaction that adds"
+              + " it (error 55P04, unsafe use of new value). If a later statement in this"
+              + " migration uses the new value, run it in a separate transaction.");
+    }
+
     for (EnumValue value : removedEnumValues(change)) {
       String code = value.getCode();
       w.println(

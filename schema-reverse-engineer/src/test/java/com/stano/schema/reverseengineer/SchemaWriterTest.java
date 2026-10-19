@@ -218,6 +218,22 @@ public class SchemaWriterTest {
   }
 
   @Test
+  @DisplayName("a constraint's database type round-trips")
+  void constraintDatabaseTypeRoundTrips() {
+    Schema schema = new Schema(null);
+    Table table = tableWithPrimaryKey(schema, "t");
+    table.getConstraints().add(new Constraint("c1", "check (a > 0)", DatabaseType.POSTGRESQL));
+    schema.addTable(table);
+
+    String xml = write(schema);
+    Schema reparsed = reparse(xml);
+
+    assertTrue(xml.contains("<constraint name=\"c1\" databaseType=\"postgresql\">"), xml);
+    assertEquals(
+        DatabaseType.POSTGRESQL, reparsed.getTable("t").getConstraints().get(0).getDatabaseType());
+  }
+
+  @Test
   @DisplayName("a generated column is written as the bare expression")
   void generatedColumnIsBareExpression() {
     Schema schema = new Schema(null);

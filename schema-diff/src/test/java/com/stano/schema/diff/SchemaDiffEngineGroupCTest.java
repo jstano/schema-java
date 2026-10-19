@@ -119,6 +119,31 @@ class SchemaDiffEngineGroupCTest {
   }
 
   @Test
+  void topOtherSqlPrecedesTablesAndBottomOtherSqlFollowsEverything() {
+    Schema oldSchema = new Schema(TEST_URL);
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addOtherSql(new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.BOTTOM, "bottom"));
+    newSchema.addOtherSql(new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.TOP, "top"));
+    table(newSchema, "people");
+
+    var changes = engine.diff(oldSchema, newSchema).getChanges();
+
+    assertEquals(3, changes.size());
+    assertEquals("top", ((AddOtherSqlChange) changes.get(0)).getOtherSql().getSql());
+    assertEquals("bottom", ((AddOtherSqlChange) changes.get(2)).getOtherSql().getSql());
+  }
+
+  @Test
+  void blankOtherSqlEntriesProduceNoChange() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addOtherSql(new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.TOP, "  "));
+    Schema newSchema = new Schema(TEST_URL);
+    newSchema.addOtherSql(new OtherSql(DatabaseType.POSTGRESQL, OtherSqlOrder.BOTTOM, ""));
+
+    assertTrue(engine.diff(oldSchema, newSchema).isEmpty());
+  }
+
+  @Test
   void triggerAddedToExistingTableIsReported() {
     Schema oldSchema = new Schema(TEST_URL);
     table(oldSchema, "people");

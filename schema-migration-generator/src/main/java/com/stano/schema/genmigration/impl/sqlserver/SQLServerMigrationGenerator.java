@@ -39,7 +39,9 @@ import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -373,12 +375,27 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     }
     writeAddCheckConstraint(table, newCol);
 
+    // Putting a foreign key back before the column on its other side has been altered too would
+    // fail on mismatched types, so the re-adds wait until every ModifyColumn in the run is done.
     for (AddKeyChange key : blockingKeys) {
-      generateAddKey(key);
+      pendingKeys.putIfAbsent(
+          key.getTableName() + "#" + key.getKey().getType() + "#" + key.getOrdinal(), key);
     }
     for (AddRelationChange relation : blockingRelations) {
-      generateAddRelation(relation);
+      pendingRelations.putIfAbsent(
+          relation.getRelation().getFromTableName() + "#" + relation.getOrdinal(), relation);
     }
+  }
+
+  private final Map<String, AddKeyChange> pendingKeys = new LinkedHashMap<>();
+  private final Map<String, AddRelationChange> pendingRelations = new LinkedHashMap<>();
+
+  @Override
+  protected void afterColumnModifications() {
+    pendingKeys.values().forEach(this::generateAddKey);
+    pendingRelations.values().forEach(this::generateAddRelation);
+    pendingKeys.clear();
+    pendingRelations.clear();
   }
 
   /**

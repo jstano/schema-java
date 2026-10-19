@@ -132,6 +132,21 @@ class GroupCMigrationTest {
   }
 
   @Test
+  @DisplayName("Postgres: adding an enum value warns that it can't be used in the same transaction")
+  void postgresAddedEnumValueWarnsAboutSameTransactionUse() {
+    EnumType oldType = new EnumType("Gender");
+    oldType.addValue(new EnumValue("MALE", "m"));
+    EnumType newType = new EnumType("Gender");
+    newType.addValue(new EnumValue("MALE", "m"));
+    newType.addValue(new EnumValue("OTHER", "o"));
+
+    String sql = run(DatabaseType.POSTGRESQL, null, new ModifyEnumTypeChange(oldType, newType));
+
+    assertTrue(sql.contains("ADD VALUE IF NOT EXISTS 'o'"), sql);
+    assertTrue(sql.contains("55P04"), sql);
+  }
+
+  @Test
   @DisplayName("SQL Server: modified enum regenerates the check constraint on every column")
   void sqlServerModifyEnum() {
     EnumType newType = enumType("Gender", "m", "f", "x");

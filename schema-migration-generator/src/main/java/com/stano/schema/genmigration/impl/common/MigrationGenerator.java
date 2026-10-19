@@ -86,13 +86,29 @@ public abstract class MigrationGenerator {
   public void generate() {
     PrintWriter writer = options.getWriter();
     try {
+      boolean inColumnModifications = false;
       for (SchemaChange change : options.getChangeSet().getChanges()) {
+        boolean modifiesColumn = change instanceof ModifyColumnChange;
+        if (inColumnModifications && !modifiesColumn) {
+          afterColumnModifications();
+        }
         generateChange(change);
+        inColumnModifications = modifiesColumn;
+      }
+      if (inColumnModifications) {
+        afterColumnModifications();
       }
     } finally {
       writer.flush();
     }
   }
+
+  /**
+   * Called once after a run of consecutive {@link ModifyColumnChange}s, so a dialect that has to
+   * take dependent objects (foreign keys, say) off a column while altering it can put them all back
+   * only when every column in the run has its final type. The default does nothing.
+   */
+  protected void afterColumnModifications() {}
 
   private void generateChange(SchemaChange change) {
     if (change instanceof AddTableChange c) {

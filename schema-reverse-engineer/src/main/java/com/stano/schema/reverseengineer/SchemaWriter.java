@@ -156,7 +156,8 @@ public class SchemaWriter {
       // and indexes of a table without a primary key can't be written; skip them with a warning
       // rather than failing the whole run.
       if (table.getPrimaryKey() == null) {
-        LOGGER.warn(
+        Warnings.warn(
+            LOGGER,
             "Table {} has no primary key, so its unique keys and indexes can't be written to the"
                 + " schema XML - skipping them",
             table.getName());
@@ -313,7 +314,12 @@ public class SchemaWriter {
   }
 
   private void outputConstraint(Constraint constraint) {
-    out.printf("      <constraint name=\"%s\">\n", escapeAttr(constraint.getName()));
+    out.printf(
+        "      <constraint name=\"%s\"%s>\n",
+        escapeAttr(constraint.getName()),
+        constraint.getDatabaseType() == null
+            ? ""
+            : " databaseType=\"" + constraint.getDatabaseType().toString().toLowerCase() + "\"");
     out.printf("        %s\n", cdata("\n        " + constraint.getSql() + "\n        "));
     out.printf("      </constraint>\n");
   }

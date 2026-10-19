@@ -16,6 +16,7 @@ import com.stano.schema.model.KeyType;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
+import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -384,5 +385,19 @@ public class SchemaReaderTest {
         "create or replace function f() returns int as $$ select 1 $$",
         SchemaReader.trimRoutineDefinition(
             "\ncreate or replace function f() returns int as $$ select 1 $$;\n"));
+  }
+
+  @Test
+  @DisplayName("readSchema rejects a database that is not PostgreSQL")
+  void readSchemaRejectsNonPostgres() throws SQLException {
+    Connection connection = mock(Connection.class);
+    DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+    when(connection.getMetaData()).thenReturn(metaData);
+    when(metaData.getDatabaseProductName()).thenReturn("H2");
+
+    var x = assertThrows(IllegalArgumentException.class, () -> reader.readSchema(connection));
+
+    assertTrue(x.getMessage().contains("PostgreSQL only"), x.getMessage());
+    assertTrue(x.getMessage().contains("H2"), x.getMessage());
   }
 }

@@ -332,6 +332,38 @@ class GroupBMigrationTest {
   }
 
   @Test
+  @DisplayName("SQL Server: a foreign key goes back only after both of its columns are altered")
+  void sqlServerForeignKeyReaddedAfterBothSidesChange() {
+    Schema schema = new Schema(null);
+    Table parent = table(schema, "parent", intColumn("id", true));
+    parent.getKeys().add(new Key(KeyType.PRIMARY, List.of(new KeyColumn("id"))));
+    Table child = table(schema, "child", intColumn("parent_id", true));
+    child
+        .getRelations()
+        .add(new Relation("child", "parent_id", "parent", "id", RelationType.CASCADE, false));
+
+    String sql =
+        run(
+            DatabaseType.SQL_SERVER,
+            schema,
+            new ModifyColumnChange(
+                "parent",
+                column("id", ColumnType.INT, true, null, null),
+                column("id", ColumnType.LONG, true, null, null)),
+            new ModifyColumnChange(
+                "child",
+                column("parent_id", ColumnType.INT, true, null, null),
+                column("parent_id", ColumnType.LONG, true, null, null)));
+
+    int alterParent = sql.indexOf("ALTER TABLE parent ALTER COLUMN id bigint");
+    int alterChild = sql.indexOf("ALTER TABLE child ALTER COLUMN parent_id bigint");
+    int addFk = sql.indexOf("ADD CONSTRAINT fk_child1");
+    assertTrue(alterParent >= 0 && alterChild >= 0, sql);
+    assertTrue(addFk > alterParent && addFk > alterChild, sql);
+    assertTrue(sql.indexOf("ADD CONSTRAINT fk_child1", addFk + 1) < 0, "re-added once: " + sql);
+  }
+
+  @Test
   @DisplayName("M27: SQL Server DropColumn drops the column's default and check constraints first")
   void sqlServerDropColumnDropsConstraints() {
     String sql = run(DatabaseType.SQL_SERVER, null, new DropColumnChange("t", "n"));

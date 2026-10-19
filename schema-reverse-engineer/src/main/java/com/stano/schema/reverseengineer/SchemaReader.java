@@ -16,9 +16,7 @@ import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,10 +54,16 @@ public class SchemaReader {
       var schema = new Schema(null);
       var metaData = connection.getMetaData();
 
+      String product = metaData.getDatabaseProductName();
+      if (!"PostgreSQL".equalsIgnoreCase(product)) {
+        throw new IllegalArgumentException(
+            "reverse engineering supports PostgreSQL only, but the database is " + product);
+      }
+
       populateTables(schema, metaData, dbSchema);
       populateColumns(schema, metaData, dbSchema);
       populatePrimaryKeys(schema, metaData, dbSchema);
-      populateConstraints(schema, connection);
+      populateConstraints(schema, connection, dbSchema);
       populateKeys(schema, connection, dbSchema);
       populateImportedKeys(schema, metaData, dbSchema);
       populateRoutines(schema, connection, dbSchema);
@@ -101,6 +105,17 @@ public class SchemaReader {
                 table -> {
                   ColumnType columnType =
                       getColumnType(dataType, typeName, autoIncrement.equals("YES"), columnSize);
+                  ColumnType elementType = getElementType(dataType, typeName);
+                  if (columnType == ColumnType.ARRAY && elementType == null) {
+                    Warnings.warn(
+                        LOGGER,
+                        "Column {}.{} has array type '{}', which the schema model can't"
+                            + " represent - falling back to text",
+                        tableName,
+                        columnName,
+                        typeName);
+                    columnType = ColumnType.TEXT;
+                  }
 
                   table
                       .getColumns()
@@ -117,7 +132,7 @@ public class SchemaReader {
                               null,
                               null,
                               null,
-                              getElementType(dataType, typeName, columnSize)));
+                              elementType));
                 });
       }
     }
@@ -158,31 +173,34 @@ public class SchemaReader {
     }
   }
 
-  private void populateConstraints(Schema schema, Connection connection) throws SQLException {
-    try (Statement statement = connection.createStatement()) {
-      try (ResultSet rs =
-          statement.executeQuery(
-              "SELECT conrelid::regclass AS tablename, conname, contype, pg_get_constraintdef(oid)"
-                  + " AS definition"
-                  + " FROM"
-                  + " pg_constraint;")) { // WHERE conrelid =
-        // 'classificationrulecriteriaconfig'::regclass
+  private void populateConstraints(Schema schema, Connection connection, String dbSchema)
+      throws SQLException {
+    try (var statement =
+        connection.prepareStatement(
+            "SELECT c.relname AS tablename, con.conname, con.contype::text AS contype,"
+                + " pg_get_constraintdef(con.oid) AS definition"
+                + " FROM pg_constraint con"
+                + " JOIN pg_class c ON c.oid = con.conrelid"
+                + " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                + " WHERE n.nspname = ? AND con.contype IN ('c', 'x')"
+                + " ORDER BY c.relname, con.conname")) {
+      statement.setString(1, dbSchema);
+      try (var rs = statement.executeQuery()) {
         while (rs.next()) {
           String tableName = rs.getString("tablename");
           String constraintName = rs.getString("conname");
-          String constraintType = rs.getString("contype");
           String definition = rs.getString("definition");
 
-          if (constraintType.equals("p")) {
-          } else if (constraintType.equals("u")) {
-          } else if (constraintType.equals("x") || constraintType.equals("c")) {
-            schema
-                .getOptionalTable(tableName)
-                .ifPresent(
-                    table -> {
-                      table.getConstraints().add(new Constraint(constraintName, definition, null));
-                    });
-          }
+          // Primary and unique keys come from the key queries; only check and exclusion
+          // constraints have no other representation.
+          schema
+              .getOptionalTable(tableName)
+              .ifPresent(
+                  table ->
+                      table
+                          .getConstraints()
+                          .add(
+                              new Constraint(constraintName, definition, DatabaseType.POSTGRESQL)));
         }
       }
     }
@@ -279,7 +297,8 @@ public class SchemaReader {
         continue;
       }
       if (group.hasExpression()[0]) {
-        LOGGER.warn(
+        Warnings.warn(
+            LOGGER,
             "Index {}.{} is an expression index, which the schema model can't represent -"
                 + " skipping it",
             first.tableName(),
@@ -442,7 +461,8 @@ public class SchemaReader {
     for (var foreignKey : foreignKeys) {
       String pkSchema = foreignKey.pkSchemaName();
       if (dbSchema != null && pkSchema != null && !pkSchema.equalsIgnoreCase(dbSchema)) {
-        LOGGER.warn(
+        Warnings.warn(
+            LOGGER,
             "Foreign key {}.{} references {}.{} in another schema, which the schema model can't"
                 + " represent - skipping it",
             foreignKey.fkTableName(),
@@ -605,22 +625,30 @@ public class SchemaReader {
     // An unsupported/unmapped type falls back to TEXT with a warning rather than aborting the
     // whole run - losing one column's exact type is far better than producing no output at all
     // for the rest of the database.
-    LOGGER.warn(
-        "Unknown data type '{}' (typeName='{}') - falling back to text", dataType, typeName);
+    Warnings.warn(
+        LOGGER,
+        "Unknown data type '{}' (typeName='{}') - falling back to text",
+        dataType,
+        typeName);
     return ColumnType.TEXT;
   }
 
-  private ColumnType getElementType(int dataType, String typeName, int columnSize) {
+  /**
+   * The element type of a Postgres array column, or {@code null} for a non-array column or an
+   * element type the schema model has no array support for. Array columns carry no usable length,
+   * so character arrays map to {@code text}.
+   */
+  private ColumnType getElementType(int dataType, String typeName) {
     if (dataType != Types.ARRAY) {
       return null;
     }
 
     return switch (typeName) {
-      case "_text" -> ColumnType.TEXT;
+      case "_text", "_varchar", "_bpchar" -> ColumnType.TEXT;
       case "_int2" -> ColumnType.SHORT;
       case "_int4" -> ColumnType.INT;
       case "_int8" -> ColumnType.LONG;
-      default -> ColumnType.ARRAY;
+      default -> null;
     };
   }
 

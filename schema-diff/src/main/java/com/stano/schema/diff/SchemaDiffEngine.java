@@ -36,6 +36,7 @@ import com.stano.schema.model.InitialData;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyType;
 import com.stano.schema.model.OtherSql;
+import com.stano.schema.model.OtherSqlOrder;
 import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
@@ -107,9 +108,9 @@ public class SchemaDiffEngine {
 
     // Add phase: tables → columns → modify → keys → constraints → relations → functions →
     // procedures → views
-    // Enum types and other_sql go first - tables and columns may depend on them.
+    // Enum types and top-of-file other_sql go first - tables and columns may depend on them.
     addEnumTypes(changeSet, oldSchema, newSchema);
-    addOtherSql(changeSet, oldSchema, newSchema);
+    addOtherSql(changeSet, oldSchema, newSchema, OtherSqlOrder.TOP);
     addTables(changeSet, oldSchema, newSchema);
     addColumns(changeSet, oldSchema, newSchema);
     modifyColumns(changeSet, oldSchema, newSchema);
@@ -122,6 +123,8 @@ public class SchemaDiffEngine {
     addTriggers(changeSet, oldSchema, newSchema);
     // Last: initial data rows reference columns and keys that must already exist.
     addInitialData(changeSet, oldSchema, newSchema);
+    // Bottom-of-file other_sql comes after everything else, as in a fresh install.
+    addOtherSql(changeSet, oldSchema, newSchema, OtherSqlOrder.BOTTOM);
     // Enum drops go last of all: Postgres can't DROP TYPE while a column still uses it, and columns
     // that move off a dropped enum are only retyped by modifyColumns in the add phase.
     dropEnumTypes(changeSet, oldSchema, newSchema);
@@ -488,9 +491,14 @@ public class SchemaDiffEngine {
     return true;
   }
 
-  private void addOtherSql(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+  private void addOtherSql(
+      ChangeSet changeSet, Schema oldSchema, Schema newSchema, OtherSqlOrder order) {
     for (OtherSql nw : newSchema.getOtherSql()) {
-      if (!containsOtherSql(oldSchema.getOtherSql(), nw)) {
+      // Blank entries generate nothing on a fresh install, so a migration must not emit them
+      // either.
+      if (nw.getOrder() == order
+          && !trimmed(nw.getSql()).isEmpty()
+          && !containsOtherSql(oldSchema.getOtherSql(), nw)) {
         changeSet.addChange(new AddOtherSqlChange(nw));
       }
     }
@@ -498,7 +506,7 @@ public class SchemaDiffEngine {
 
   private void dropOtherSql(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
     for (OtherSql old : oldSchema.getOtherSql()) {
-      if (!containsOtherSql(newSchema.getOtherSql(), old)) {
+      if (!trimmed(old.getSql()).isEmpty() && !containsOtherSql(newSchema.getOtherSql(), old)) {
         changeSet.addChange(new DropOtherSqlChange(old));
       }
     }

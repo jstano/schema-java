@@ -20,12 +20,12 @@ Six "merged changes from schema-rs" commits ported Groups A-G from `../schema-rs
 - [x] SQL Server delete trigger uses first PK column rather than `relation.getFromColumnName()` (`SQLServerDeleteTriggerGenerator.java:87-91`).
 - [x] Postgres `ModifyColumn` never cycles CHECK constraints (varchar widening leaves old check).
 - [x] Sequence columns: false M25 halt on Postgres; invalid identity DDL on SQL Server (`PostgreSQL...:123`, `SQLServer...:138,206`).
-- [ ] SQL Server FK re-add happens per column (fails when both FK sides change type): defer to after all ModifyColumns (also Rust).
+- [x] SQL Server FK re-add happens per column (fails when both FK sides change type): defer to after all ModifyColumns (also Rust).
 - [x] Removed last trigger never dropped (`MigrationGenerator regenerateTriggers`): new `outputDropObsoleteTriggersForTable` hook drops the trigger/function.
-- [ ] `other_sql` TOP/BOTTOM ignored + blank entries emitted by migrations; PG `ADD VALUE` then use in same migration (55P04) - at least warn.
+- [x] `other_sql` TOP/BOTTOM ignored + blank entries emitted by migrations; PG `ADD VALUE` then use in same migration (55P04) - at least warn.
 - [x] H2 `ModifyColumn` drop/re-add: replace with `ALTER COLUMN ... SET DATA TYPE / SET [NOT] NULL / SET DEFAULT`.
-- [ ] Reverse engineer: fail fast with "PostgreSQL only" for other DBs (sync doc M35 skip is wrong); `populateConstraints` unscoped by schema and name-matching via `regclass` text; constraints written without `databaseType="postgresql"`; ARRAY element types beyond `_text/_int*`.
-- [ ] Reverse-engineer warnings go to slf4j with no binding: write to `System.err` (or add runtime binding).
+- [x] Reverse engineer: fail fast with "PostgreSQL only" for other DBs (sync doc M35 skip is wrong); `populateConstraints` unscoped by schema and name-matching via `regclass` text; constraints written without `databaseType="postgresql"`; ARRAY element types beyond `_text/_int*`.
+- [x] Reverse-engineer warnings go to slf4j with no binding: write to `System.err` (or add runtime binding).
 - [x] CLI: `new URI("file://" + path)` breaks relative paths/spaces in `GenSQL`/`GenDiagram` - use `Path.toUri()`.
 - [x] Mermaid emits `PK FK` for a column that is both (use PK only, like PlantUML).
 
