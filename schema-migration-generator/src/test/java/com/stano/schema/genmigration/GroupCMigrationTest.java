@@ -277,4 +277,39 @@ class GroupCMigrationTest {
 
     assertEquals("", run(DatabaseType.POSTGRESQL, schema, new AddTriggerChange("people", trigger)));
   }
+
+  @Test
+  @DisplayName("triggers: removing a table's last trigger drops it")
+  void removedLastTriggerIsDropped() {
+    Schema schema = new Schema(GroupCMigrationTest.class.getResource("/"));
+    Table table = new Table(schema, "public", "people", null, LockEscalation.AUTO, false);
+    schema.addTable(table);
+    Trigger removed = new Trigger("x := 1;", TriggerType.UPDATE, DatabaseType.POSTGRESQL);
+
+    String pg = run(DatabaseType.POSTGRESQL, schema, new DropTriggerChange("people", removed));
+
+    assertTrue(pg.contains("drop trigger if exists people_update on public.people"), pg);
+    assertTrue(pg.contains("drop function if exists public.people_update()"), pg);
+    assertTrue(pg.contains("drop trigger if exists people_delete on public.people"), pg);
+
+    Trigger ssRemoved = new Trigger("x", TriggerType.UPDATE, DatabaseType.SQL_SERVER);
+    String ss = run(DatabaseType.SQL_SERVER, schema, new DropTriggerChange("people", ssRemoved));
+
+    assertTrue(ss.contains("drop trigger dbo.people_update"), ss);
+  }
+
+  @Test
+  @DisplayName("triggers: a trigger that is still needed is regenerated, not dropped")
+  void stillNeededTriggerIsNotDropped() {
+    Schema schema = new Schema(GroupCMigrationTest.class.getResource("/"));
+    Table table = new Table(schema, "public", "people", null, LockEscalation.AUTO, false);
+    Trigger kept = new Trigger("x := 1;", TriggerType.UPDATE, DatabaseType.POSTGRESQL);
+    table.getTriggers().add(kept);
+    schema.addTable(table);
+
+    String sql = run(DatabaseType.POSTGRESQL, schema, new DropTriggerChange("people", kept));
+
+    assertTrue(sql.contains("create or replace function public.people_update"), sql);
+    assertTrue(!sql.contains("drop function if exists public.people_update"), sql);
+  }
 }

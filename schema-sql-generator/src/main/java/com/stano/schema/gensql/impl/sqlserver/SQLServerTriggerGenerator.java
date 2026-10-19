@@ -20,6 +20,30 @@ class SQLServerTriggerGenerator extends TriggerGenerator {
   }
 
   @Override
+  protected void outputDropDeleteTrigger(Table table) {
+
+    outputDropTrigger(table, "_delete");
+  }
+
+  @Override
+  protected void outputDropUpdateTrigger(Table table) {
+
+    outputDropTrigger(table, "_update");
+  }
+
+  private void outputDropTrigger(Table table, String suffix) {
+
+    String name = table.getName().toLowerCase() + suffix;
+    String schemaName =
+        table.getSchemaName().equalsIgnoreCase("public") ? "dbo" : table.getSchemaName();
+    String fullyQualifiedTrigger = schemaName + "." + name;
+    sqlWriter.println(
+        "if object_id('" + escapeSqlLiteral(fullyQualifiedTrigger) + "', 'TR') is not null");
+    sqlWriter.println("   drop trigger " + fullyQualifiedTrigger + statementSeparator);
+    sqlWriter.println();
+  }
+
+  @Override
   protected void outputDeleteTrigger(Table table, List<Relation> relations) {
 
     deleteTriggerGenerator.outputDeleteTrigger(table, relations);

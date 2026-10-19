@@ -27,9 +27,11 @@ import com.stano.schema.gensql.impl.h2.H2ColumnTypeMapper;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
+import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.Naming;
 import java.io.PrintWriter;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -146,28 +148,72 @@ public class H2MigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateModifyColumn(ModifyColumnChange change) {
     PrintWriter w = options.getWriter();
+    Column oldCol = change.getOldColumn();
     Column newCol = change.getNewColumn();
-    String tableName = change.getTableName();
-    String colName = newCol.getName();
+    String table = change.getTableName();
+    String alter = "ALTER TABLE " + table + " ALTER COLUMN " + newCol.getName();
 
-    w.println("ALTER TABLE " + tableName + " DROP COLUMN IF EXISTS " + colName);
-    w.print(options.getStatementSeparator());
-    w.println();
+    String newType = alterColumnType(newCol);
+    boolean typeChanged = !newType.equals(alterColumnType(oldCol));
 
-    StringBuilder sb = new StringBuilder();
-    sb.append("ALTER TABLE ")
-        .append(tableName)
-        .append(" ADD COLUMN IF NOT EXISTS ")
-        .append(colName)
-        .append(" ")
-        .append(mapper.toSqlType(newCol));
-    if (newCol.isRequired()) {
-      sb.append(" NOT NULL");
+    // The column's check clause is built from its type, check, min/max and enum attributes; when
+    // any changed, the old constraint is stale, so it comes off first and the new one goes back on.
+    boolean cycleCheck = typeChanged || checkAttributesChanged(oldCol, newCol);
+    String checkName = getCheckConstraintName(table, newCol.getName());
+    if (cycleCheck) {
+      writeStatement("ALTER TABLE " + table + " DROP CONSTRAINT IF EXISTS " + checkName);
     }
-    if (newCol.getDefaultConstraint() != null) {
-      sb.append(" DEFAULT ").append(newCol.getDefaultConstraint());
+
+    if (typeChanged) {
+      writeStatement(alter + " SET DATA TYPE " + newType);
     }
-    w.println(sb.toString());
+
+    if (oldCol.isRequired() != newCol.isRequired()) {
+      writeStatement(alter + (newCol.isRequired() ? " SET NOT NULL" : " DROP NOT NULL"));
+    }
+
+    if (!Objects.equals(oldCol.getDefaultConstraint(), newCol.getDefaultConstraint())) {
+      writeStatement(
+          alter
+              + (newCol.getDefaultConstraint() != null
+                  ? " SET DEFAULT " + newCol.getDefaultConstraint()
+                  : " DROP DEFAULT"));
+    }
+
+    if (cycleCheck) {
+      String checkSql = getCheckConstraintSql(newCol);
+      if (checkSql != null) {
+        writeStatement(
+            "ALTER TABLE " + table + " ADD CONSTRAINT IF NOT EXISTS " + checkName + " " + checkSql);
+      }
+    }
+    w.flush();
+  }
+
+  /**
+   * The type to hand {@code SET DATA TYPE}. An identity column's mapped type carries the identity
+   * clause, which {@code SET DATA TYPE} rejects, so it is reduced to the bare integer type.
+   */
+  private String alterColumnType(Column column) {
+    if (column.getType() == ColumnType.SEQUENCE) {
+      return "integer";
+    }
+    if (column.getType() == ColumnType.LONGSEQUENCE) {
+      return "bigint";
+    }
+    return mapper.toSqlType(column);
+  }
+
+  private static boolean checkAttributesChanged(Column oldCol, Column newCol) {
+    return !Objects.equals(oldCol.getCheckConstraint(), newCol.getCheckConstraint())
+        || !Objects.equals(oldCol.getMinValue(), newCol.getMinValue())
+        || !Objects.equals(oldCol.getMaxValue(), newCol.getMaxValue())
+        || !Objects.equals(oldCol.getEnumType(), newCol.getEnumType());
+  }
+
+  private void writeStatement(String sql) {
+    PrintWriter w = options.getWriter();
+    w.println(sql);
     w.print(options.getStatementSeparator());
     w.println();
   }

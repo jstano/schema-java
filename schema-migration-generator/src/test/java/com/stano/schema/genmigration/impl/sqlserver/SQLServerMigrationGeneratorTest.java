@@ -1,6 +1,7 @@
 package com.stano.schema.genmigration.impl.sqlserver;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.ChangeSet;
@@ -569,5 +570,26 @@ class SQLServerMigrationGeneratorTest {
             assertTrue(
                 sql.contains("sp_rename 'users.first_name', 'given_name', 'COLUMN'"),
                 "got: " + sql));
+  }
+
+  @Test
+  @DisplayName("add-column of a required sequence column adds a NOT NULL identity with no halt")
+  void addRequiredSequenceColumnIsNotNullIdentityWithoutHalt() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(
+        new AddColumnChange("product", new Column("seq", ColumnType.SEQUENCE, 0, true)));
+
+    StringWriter sw = new StringWriter();
+    new SQLServerMigrationGenerator(
+            new MigrationGeneratorOptions(
+                changeSet,
+                new PrintWriter(sw),
+                DatabaseType.SQL_SERVER,
+                new com.stano.schema.model.Schema(null)))
+        .generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("ADD seq integer identity(1,1) NOT NULL"), sql);
+    assertFalse(sql.contains("THROW"), sql);
   }
 }

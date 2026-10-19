@@ -124,6 +124,12 @@ public class SQLServerGenerator extends SQLGenerator {
   }
 
   @Override
+  public void outputDropObsoleteTriggersForTable(Table table) {
+
+    triggerGenerator.outputDropObsoleteTriggersForTable(table);
+  }
+
+  @Override
   protected void outputFunctions() {
 
     functionGenerator.outputFunctions();

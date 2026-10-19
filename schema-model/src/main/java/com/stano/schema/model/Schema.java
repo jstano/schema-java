@@ -437,18 +437,18 @@ public class Schema {
 
   /**
    * Derives the reverse (parent-to-child) side of every relation and attaches it to the referenced
-   * parent table's {@linkplain Table#getReverseRelations() reverse relations} list.
+   * parent table's {@linkplain Table#getReverseRelations() reverse relations} list. A relation
+   * whose target table does not exist is skipped, so {@link #validate()} can report it.
    */
   public void buildReverseRelations() {
     for (Table table : tables) {
       if (!table.getRelations().isEmpty()) {
         for (Relation relation : table.getRelations()) {
-          String parentTableName = relation.getToTableName();
-          Table parentTable = getTable(parentTableName);
-
-          Relation reverseRelation = buildReverseRelation(relation);
-
-          parentTable.getReverseRelations().add(reverseRelation);
+          // A relation to a missing table has no parent to attach to; validate() reports it.
+          getOptionalTable(relation.getToTableName())
+              .ifPresent(
+                  parentTable ->
+                      parentTable.getReverseRelations().add(buildReverseRelation(relation)));
         }
       }
     }

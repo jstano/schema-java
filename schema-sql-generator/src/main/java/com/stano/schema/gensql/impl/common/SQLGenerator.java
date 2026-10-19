@@ -148,6 +148,15 @@ public abstract class SQLGenerator {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Outputs drops for a table's delete/update triggers that the table no longer needs, so a
+   * migration that removes a table's last trigger does not leave the old one behind. The default
+   * does nothing; dialects with triggers override it.
+   *
+   * @param table the table whose obsolete triggers should be dropped
+   */
+  public void outputDropObsoleteTriggersForTable(Table table) {}
+
   /** Outputs the DDL statements that create functions. */
   protected abstract void outputFunctions();
 

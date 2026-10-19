@@ -346,4 +346,22 @@ class SchemaTest {
 
     assertTrue(schema.validate().isEmpty(), schema.validate().toString());
   }
+
+  @Test
+  @DisplayName("a relation to a missing table is reported by validate instead of failing the build")
+  void relationToMissingTableIsReportedByValidate() {
+    Schema schema = new Schema(null);
+    Table child = new Table(null, "app", "child", null, null, false);
+    child.getColumns().add(new Column("parent_id", ColumnType.INT, 0, false));
+    child
+        .getRelations()
+        .add(new Relation("child", "parent_id", "ghost", "id", RelationType.ENFORCE, false));
+    schema.addTable(child);
+
+    schema.buildReverseRelations();
+
+    assertTrue(
+        schema.validate().stream().anyMatch(e -> e.contains("relation to 'ghost' which does not")),
+        schema.validate().toString());
+  }
 }

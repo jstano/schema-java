@@ -135,7 +135,8 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
               + (col.isRequired() ? " NOT NULL" : ""));
       w.print(options.getStatementSeparator());
       w.println();
-    } else if (col.isRequired() && col.getDefaultConstraint() == null) {
+    } else if (col.isRequired() && col.getDefaultConstraint() == null && !isIdentity(col)) {
+      // An identity column numbers existing rows itself, so there is nothing to backfill.
       writeNotNullColumnWithBackfillGuard(table, col);
     } else {
       StringBuilder sb = new StringBuilder();
@@ -147,7 +148,7 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
           .append(col.getName())
           .append(" ")
           .append(mapper.toSqlType(col))
-          .append(col.isRequired() ? " NOT NULL" : " NULL");
+          .append(col.isRequired() || isIdentity(col) ? " NOT NULL" : " NULL");
       if (col.getDefaultConstraint() != null) {
         sb.append(" CONSTRAINT ")
             .append(ColumnGenerator.defaultConstraintName(table, col.getName()))
@@ -160,6 +161,10 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     }
 
     writeAddCheckConstraint(table, col);
+  }
+
+  private static boolean isIdentity(Column column) {
+    return column.getType() == ColumnType.SEQUENCE || column.getType() == ColumnType.LONGSEQUENCE;
   }
 
   private static String columnMissingCondition(String table, String column) {

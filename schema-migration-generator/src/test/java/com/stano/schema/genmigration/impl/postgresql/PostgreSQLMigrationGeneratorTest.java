@@ -20,6 +20,7 @@ import com.stano.schema.diff.change.DropKeyChange;
 import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
+import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGeneratorOptions;
@@ -671,5 +672,77 @@ class PostgreSQLMigrationGeneratorTest {
                         + " 'first_name'"),
                 "got: " + sql),
         () -> assertTrue(sql.contains("RENAME COLUMN first_name TO given_name"), "got: " + sql));
+  }
+
+  private String modifyColumn(Column oldCol, Column newCol) {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(new ModifyColumnChange("product", oldCol, newCol));
+
+    StringWriter sw = new StringWriter();
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(
+            changeSet, new PrintWriter(sw), DatabaseType.POSTGRESQL, new Schema(null));
+    new PostgreSQLMigrationGenerator(opts).generate();
+    return sw.toString();
+  }
+
+  @Test
+  @DisplayName("modify-column replaces the CHECK constraint when the bounds change")
+  void modifyColumnCyclesCheckWhenBoundsChange() {
+    Column oldCol =
+        new Column("price", ColumnType.INT, 0, 0, false, null, null, null, "0", "100", null, null);
+    Column newCol =
+        new Column("price", ColumnType.INT, 0, 0, false, null, null, null, "0", "500", null, null);
+
+    String sql = modifyColumn(oldCol, newCol);
+
+    int drop = sql.indexOf("DROP CONSTRAINT IF EXISTS ck_product_price_");
+    int add = sql.indexOf("ADD CONSTRAINT ck_product_price_");
+    assertTrue(drop >= 0 && add > drop, "expected drop then add, got: " + sql);
+    assertTrue(sql.contains("check(price >= 0 and price <= 500)"), sql);
+  }
+
+  @Test
+  @DisplayName("modify-column drops the CHECK constraint when the bounds are removed")
+  void modifyColumnDropsCheckWhenBoundsRemoved() {
+    Column oldCol =
+        new Column("price", ColumnType.INT, 0, 0, false, null, null, null, "0", "100", null, null);
+    Column newCol = new Column("price", ColumnType.INT, 0, false);
+
+    String sql = modifyColumn(oldCol, newCol);
+
+    assertTrue(sql.contains("DROP CONSTRAINT IF EXISTS ck_product_price_"), sql);
+    assertFalse(sql.contains("ADD CONSTRAINT"), sql);
+  }
+
+  @Test
+  @DisplayName("modify-column leaves the CHECK constraint alone when only nullability changes")
+  void modifyColumnLeavesCheckAloneForNullabilityChange() {
+    Column oldCol =
+        new Column("price", ColumnType.INT, 0, 0, false, null, null, null, "0", "100", null, null);
+    Column newCol =
+        new Column("price", ColumnType.INT, 0, 0, true, null, null, null, "0", "100", null, null);
+
+    String sql = modifyColumn(oldCol, newCol);
+
+    assertFalse(sql.contains("CONSTRAINT"), sql);
+  }
+
+  @Test
+  @DisplayName("add-column of a required sequence column needs no backfill halt")
+  void addRequiredSequenceColumnHasNoBackfillHalt() {
+    ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(
+        new AddColumnChange("product", new Column("seq", ColumnType.SEQUENCE, 0, true)));
+
+    StringWriter sw = new StringWriter();
+    new PostgreSQLMigrationGenerator(
+            new MigrationGeneratorOptions(
+                changeSet, new PrintWriter(sw), DatabaseType.POSTGRESQL, new Schema(null)))
+        .generate();
+
+    String sql = sw.toString();
+    assertTrue(sql.contains("ADD COLUMN IF NOT EXISTS seq serial"), sql);
+    assertFalse(sql.contains("Migration halted"), sql);
   }
 }

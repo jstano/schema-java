@@ -1,6 +1,7 @@
 package com.stano.schema.genmigration.impl.h2;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stano.schema.diff.ChangeSet;
@@ -113,27 +114,70 @@ class H2MigrationGeneratorTest {
                     "ALTER TABLE customers ALTER COLUMN IF EXISTS name RENAME TO full_name")));
   }
 
-  @Test
-  @DisplayName("drops and re-adds column for modify (H2 limitation)")
-  void generatesDropAndReadd() {
+  private String modifyColumn(Column oldCol, Column newCol) {
     ChangeSet changeSet = new ChangeSet();
+    changeSet.addChange(new ModifyColumnChange("users", oldCol, newCol));
+
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    MigrationGeneratorOptions opts =
+        new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2, new Schema(null));
+    new H2MigrationGenerator(opts).generate();
+    return sw.toString();
+  }
+
+  @Test
+  @DisplayName("modify-column alters the type in place without dropping the column")
+  void modifyColumnAltersTypeInPlace() {
     Column oldCol =
         new Column(
             "email", ColumnType.VARCHAR, 100, 0, false, null, null, null, null, null, null, null);
     Column newCol =
         new Column(
             "email", ColumnType.VARCHAR, 255, 0, false, null, null, null, null, null, null, null);
-    changeSet.addChange(new ModifyColumnChange("users", oldCol, newCol));
 
-    StringWriter sw = new StringWriter();
-    PrintWriter pw = new PrintWriter(sw);
-    MigrationGeneratorOptions opts = new MigrationGeneratorOptions(changeSet, pw, DatabaseType.H2);
-    H2MigrationGenerator gen = new H2MigrationGenerator(opts);
-    gen.generate();
+    String sql = modifyColumn(oldCol, newCol);
 
-    String sql = sw.toString();
-    assertTrue(sql.contains("DROP COLUMN"));
-    assertTrue(sql.contains("ADD COLUMN"));
+    assertTrue(sql.contains("ALTER TABLE users ALTER COLUMN email SET DATA TYPE"), sql);
+    assertTrue(sql.contains("255"), sql);
+    assertFalse(sql.contains("DROP COLUMN"), sql);
+    assertFalse(sql.contains("NOT NULL"), sql);
+  }
+
+  @Test
+  @DisplayName("modify-column changes nullability and default only when they differ")
+  void modifyColumnChangesNullabilityAndDefault() {
+    Column oldCol =
+        new Column("n", ColumnType.INT, 0, 0, false, null, null, null, null, null, null, null);
+    Column newCol =
+        new Column("n", ColumnType.INT, 0, 0, true, null, "5", null, null, null, null, null);
+
+    String sql = modifyColumn(oldCol, newCol);
+
+    assertTrue(sql.contains("ALTER COLUMN n SET NOT NULL"), sql);
+    assertTrue(sql.contains("ALTER COLUMN n SET DEFAULT 5"), sql);
+    assertFalse(sql.contains("SET DATA TYPE"), sql);
+    assertFalse(sql.contains("DROP COLUMN"), sql);
+
+    String back = modifyColumn(newCol, oldCol);
+    assertTrue(back.contains("ALTER COLUMN n DROP NOT NULL"), back);
+    assertTrue(back.contains("ALTER COLUMN n DROP DEFAULT"), back);
+  }
+
+  @Test
+  @DisplayName("modify-column replaces the CHECK constraint when the bounds change")
+  void modifyColumnCyclesCheck() {
+    Column oldCol =
+        new Column("n", ColumnType.INT, 0, 0, false, null, null, null, "0", "100", null, null);
+    Column newCol =
+        new Column("n", ColumnType.INT, 0, 0, false, null, null, null, "0", "500", null, null);
+
+    String sql = modifyColumn(oldCol, newCol);
+
+    int drop = sql.indexOf("DROP CONSTRAINT IF EXISTS ck_users_n_");
+    int add = sql.indexOf("ADD CONSTRAINT IF NOT EXISTS ck_users_n_");
+    assertTrue(drop >= 0 && add > drop, sql);
+    assertTrue(sql.contains("check(n >= 0 and n <= 500)"), sql);
   }
 
   @Test

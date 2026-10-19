@@ -34,6 +34,26 @@ public abstract class TriggerGenerator extends BaseGenerator {
     }
   }
 
+  /**
+   * Drops the delete and/or update trigger of a table that no longer needs one. The drops are
+   * idempotent, so it is safe when the trigger never existed.
+   *
+   * @param table the table whose obsolete triggers should be dropped
+   */
+  public void outputDropObsoleteTriggersForTable(Table table) {
+    if (!shouldOutputDeleteTrigger(table)) {
+      outputDropDeleteTrigger(table);
+    }
+
+    if (!shouldOutputUpdateTrigger(table)) {
+      outputDropUpdateTrigger(table);
+    }
+  }
+
+  protected void outputDropDeleteTrigger(Table table) {}
+
+  protected void outputDropUpdateTrigger(Table table) {}
+
   protected abstract void outputDeleteTrigger(Table table, List<Relation> relations);
 
   protected abstract void outputUpdateTrigger(Table table, List<Relation> relations);

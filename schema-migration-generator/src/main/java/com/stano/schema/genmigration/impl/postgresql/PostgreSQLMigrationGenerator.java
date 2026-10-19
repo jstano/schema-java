@@ -120,7 +120,8 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
               + (col.isRequired() ? " NOT NULL" : ""));
       w.print(options.getStatementSeparator());
       w.println();
-    } else if (col.isRequired() && col.getDefaultConstraint() == null) {
+    } else if (col.isRequired() && col.getDefaultConstraint() == null && !isSequence(col)) {
+      // serial/bigserial carries its own nextval default, so existing rows are filled for free.
       writeNotNullColumnWithBackfillGuard(table, col);
     } else {
       StringBuilder sb = new StringBuilder();
@@ -235,6 +236,20 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
     List<View> dependentViews = typeChanged ? dependentViews(table, oldCol.getName()) : List.of();
     writeDropViews(dependentViews);
 
+    // The column's check clause is built from its type, check, min/max and enum attributes. When
+    // any of them changed, the old constraint is stale (and can block the type change), so it is
+    // dropped here and the new one added back once the column has its final shape.
+    boolean cycleCheck = typeChanged || checkAttributesChanged(oldCol, newCol);
+    if (cycleCheck) {
+      w.println(
+          "ALTER TABLE "
+              + table
+              + " DROP CONSTRAINT IF EXISTS "
+              + getCheckConstraintName(table, newCol.getName()));
+      w.print(options.getStatementSeparator());
+      w.println();
+    }
+
     if (typeChanged) {
       if (isSequence(newCol)) {
         w.println(
@@ -290,7 +305,26 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
       w.println();
     }
 
+    if (cycleCheck) {
+      String checkSql = getCheckConstraintSql(newCol);
+      if (checkSql != null) {
+        String constraintName = getCheckConstraintName(table, newCol.getName());
+        writeGuardedAddConstraint(
+            w,
+            table,
+            constraintName,
+            "ALTER TABLE " + table + " ADD CONSTRAINT " + constraintName + " " + checkSql + ";");
+      }
+    }
+
     writeRecreateViews(dependentViews);
+  }
+
+  private static boolean checkAttributesChanged(Column oldCol, Column newCol) {
+    return !Objects.equals(oldCol.getCheckConstraint(), newCol.getCheckConstraint())
+        || !Objects.equals(oldCol.getMinValue(), newCol.getMinValue())
+        || !Objects.equals(oldCol.getMaxValue(), newCol.getMaxValue())
+        || !Objects.equals(oldCol.getEnumType(), newCol.getEnumType());
   }
 
   private static boolean isSequence(Column column) {

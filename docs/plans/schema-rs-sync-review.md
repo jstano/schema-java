@@ -15,14 +15,15 @@ Six "merged changes from schema-rs" commits ported Groups A-G from `../schema-rs
 ### Tier 2 - medium
 - [x] M3 tests missing: port the 4 Rust tests (user check + min/max, pre-wrapped check, boolean NATIVE, boolean YES_NO).
 - [x] Invalid schema -> empty file, exit 0 (`SQLGenerator.schemaIsValid/generate`, `GenSQL`): make it throw like the other CLI paths.
-- [ ] M11 missing-target check unreachable from XML: `SchemaParser.java:75` `buildReverseRelations()` throws before `validate()`.
+- [x] M11 missing-target check unreachable from XML: `SchemaParser.java:75` `buildReverseRelations()` throws before `validate()`.
 - [x] `Key` 2-arg ctor leaves PRIMARY non-unique, so reverse-engineered PK != parsed PK in `SchemaDiffEngine.keysEqual`: use `type != INDEX`.
 - [x] SQL Server delete trigger uses first PK column rather than `relation.getFromColumnName()` (`SQLServerDeleteTriggerGenerator.java:87-91`).
-- [ ] Postgres `ModifyColumn` never cycles CHECK constraints (varchar widening leaves old check).
-- [ ] Sequence columns: false M25 halt on Postgres; invalid identity DDL on SQL Server (`PostgreSQL...:123`, `SQLServer...:138,206`).
+- [x] Postgres `ModifyColumn` never cycles CHECK constraints (varchar widening leaves old check).
+- [x] Sequence columns: false M25 halt on Postgres; invalid identity DDL on SQL Server (`PostgreSQL...:123`, `SQLServer...:138,206`).
 - [ ] SQL Server FK re-add happens per column (fails when both FK sides change type): defer to after all ModifyColumns (also Rust).
-- [ ] Removed last trigger never dropped (`MigrationGenerator regenerateTriggers`); `other_sql` TOP/BOTTOM ignored + blank entries emitted; PG `ADD VALUE` then use in same migration (55P04) - at least warn.
-- [ ] H2 `ModifyColumn` drop/re-add: replace with `ALTER COLUMN ... SET DATA TYPE / SET [NOT] NULL / SET DEFAULT`.
+- [x] Removed last trigger never dropped (`MigrationGenerator regenerateTriggers`): new `outputDropObsoleteTriggersForTable` hook drops the trigger/function.
+- [ ] `other_sql` TOP/BOTTOM ignored + blank entries emitted by migrations; PG `ADD VALUE` then use in same migration (55P04) - at least warn.
+- [x] H2 `ModifyColumn` drop/re-add: replace with `ALTER COLUMN ... SET DATA TYPE / SET [NOT] NULL / SET DEFAULT`.
 - [ ] Reverse engineer: fail fast with "PostgreSQL only" for other DBs (sync doc M35 skip is wrong); `populateConstraints` unscoped by schema and name-matching via `regclass` text; constraints written without `databaseType="postgresql"`; ARRAY element types beyond `_text/_int*`.
 - [ ] Reverse-engineer warnings go to slf4j with no binding: write to `System.err` (or add runtime binding).
 - [x] CLI: `new URI("file://" + path)` breaks relative paths/spaces in `GenSQL`/`GenDiagram` - use `Path.toUri()`.

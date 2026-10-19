@@ -258,6 +258,7 @@ public abstract class MigrationGenerator {
                     schema.getForeignKeyMode(),
                     schema.getBooleanMode(),
                     OutputMode.ALL));
+    sqlGenerator.outputDropObsoleteTriggersForTable(table);
     sqlGenerator.outputTriggersForTable(table);
     bufferWriter.flush();
     options.getWriter().print(buffer);

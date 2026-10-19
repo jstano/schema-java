@@ -20,6 +20,38 @@ public class PostgreSQLTriggerGenerator extends TriggerGenerator {
   }
 
   @Override
+  protected void outputDropDeleteTrigger(Table table) {
+
+    outputDropTrigger(table, "_delete");
+  }
+
+  @Override
+  protected void outputDropUpdateTrigger(Table table) {
+
+    outputDropTrigger(table, "_update");
+  }
+
+  private void outputDropTrigger(Table table, String suffix) {
+
+    String name = table.getName().toLowerCase() + suffix;
+    sqlWriter.println(
+        "drop trigger if exists "
+            + name
+            + " on "
+            + getFullyQualifiedTableName(table)
+            + " cascade"
+            + statementSeparator);
+    sqlWriter.println(
+        "drop function if exists "
+            + table.getSchemaName()
+            + "."
+            + name
+            + "()"
+            + statementSeparator);
+    sqlWriter.println();
+  }
+
+  @Override
   protected void outputDeleteTrigger(Table table, List<Relation> relations) {
 
     deleteTriggerGenerator.outputDeleteTrigger(table, relations);
