@@ -7,6 +7,7 @@ import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;
 import com.stano.schema.gensql.impl.common.TableGenerator;
 import com.stano.schema.gensql.impl.common.ViewGenerator;
+import com.stano.schema.model.Table;
 
 public class H2Generator extends SQLGenerator {
 
@@ -51,6 +52,9 @@ public class H2Generator extends SQLGenerator {
 
   @Override
   protected void outputTriggers() {}
+
+  @Override
+  public void outputTriggersForTable(Table table) {}
 
   @Override
   protected void outputFunctions() {}

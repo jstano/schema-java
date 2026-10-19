@@ -118,6 +118,12 @@ public class SQLServerGenerator extends SQLGenerator {
   }
 
   @Override
+  public void outputTriggersForTable(Table table) {
+
+    triggerGenerator.outputTriggersForTable(table);
+  }
+
+  @Override
   protected void outputFunctions() {
 
     functionGenerator.outputFunctions();

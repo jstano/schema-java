@@ -2,6 +2,7 @@ package com.stano.schema.genmigration.impl.postgresql;
 
 import com.stano.schema.diff.change.AddColumnChange;
 import com.stano.schema.diff.change.AddConstraintChange;
+import com.stano.schema.diff.change.AddEnumTypeChange;
 import com.stano.schema.diff.change.AddFunctionChange;
 import com.stano.schema.diff.change.AddKeyChange;
 import com.stano.schema.diff.change.AddProcedureChange;
@@ -10,6 +11,7 @@ import com.stano.schema.diff.change.AddTableChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
 import com.stano.schema.diff.change.DropConstraintChange;
+import com.stano.schema.diff.change.DropEnumTypeChange;
 import com.stano.schema.diff.change.DropFunctionChange;
 import com.stano.schema.diff.change.DropKeyChange;
 import com.stano.schema.diff.change.DropProcedureChange;
@@ -17,6 +19,7 @@ import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
+import com.stano.schema.diff.change.ModifyEnumTypeChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGenerator;
@@ -28,6 +31,7 @@ import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.EnumValue;
 import com.stano.schema.model.Naming;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.View;
@@ -641,5 +645,90 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
     w.println("DROP VIEW IF EXISTS " + change.getViewName());
     w.print(options.getStatementSeparator());
     w.println();
+  }
+
+  /** The type name the create path gives an enum type (snake_case of the schema name). */
+  private static String enumTypeName(String schemaName) {
+    return schemaName.replaceAll("(?<=[a-z0-9])([A-Z])", "_$1").toLowerCase();
+  }
+
+  /** Guarded so re-running the migration after the type already exists is a no-op. */
+  @Override
+  protected void generateAddEnumType(AddEnumTypeChange change) {
+    String name = enumTypeName(change.getEnumType().getName());
+    String values =
+        change.getEnumType().getValues().stream()
+            .map(v -> "'" + escapeSqlLiteral(v.getCode()) + "'")
+            .collect(Collectors.joining(","));
+    PrintWriter w = options.getWriter();
+    w.println("DO $$");
+    w.println("BEGIN");
+    w.println("  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '" + name + "') THEN");
+    w.println("    CREATE TYPE " + name + " AS ENUM (" + values + ");");
+    w.println("  END IF;");
+    w.println("END $$");
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  @Override
+  protected void generateDropEnumType(DropEnumTypeChange change) {
+    PrintWriter w = options.getWriter();
+    w.println("DROP TYPE IF EXISTS " + enumTypeName(change.getEnumTypeName()) + " CASCADE");
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  /**
+   * Added values use {@code ALTER TYPE ... ADD VALUE IF NOT EXISTS}. Postgres has no {@code DROP
+   * VALUE}, so a removed value can't be enforced automatically (rows may still hold it): it gets a
+   * statement that always fails the migration until the developer confirms no rows use it.
+   */
+  @Override
+  protected void generateModifyEnumType(ModifyEnumTypeChange change) {
+    String name = enumTypeName(change.getNewEnumType().getName());
+    PrintWriter w = options.getWriter();
+    String separator = options.getStatementSeparator();
+
+    for (EnumValue value : addedEnumValues(change)) {
+      w.println(
+          "ALTER TYPE "
+              + name
+              + " ADD VALUE IF NOT EXISTS '"
+              + escapeSqlLiteral(value.getCode())
+              + "'");
+      w.print(separator);
+      w.println();
+    }
+
+    for (EnumValue value : removedEnumValues(change)) {
+      String code = value.getCode();
+      w.println(
+          "-- WARNING: enum value '"
+              + code
+              + "' was removed from '"
+              + name
+              + "'. Postgres has no ALTER TYPE ... DROP VALUE,");
+      w.println(
+          "-- so this migration cannot enforce the new value list automatically. Before it can"
+              + " run:");
+      w.println(
+          "--   1. If rows still use '"
+              + code
+              + "', add UPDATE statements above this line to migrate them to a valid value, then"
+              + " delete the block below, OR");
+      w.println("--   2. If no rows use '" + code + "', delete the block below to confirm that.");
+      w.println("DO $$");
+      w.println("BEGIN");
+      w.println(
+          "  RAISE EXCEPTION 'Migration halted: enum value ''"
+              + escapeSqlLiteral(code)
+              + "'' was removed from "
+              + name
+              + " - see comment above.';");
+      w.println("END $$");
+      w.print(separator);
+      w.println();
+    }
   }
 }

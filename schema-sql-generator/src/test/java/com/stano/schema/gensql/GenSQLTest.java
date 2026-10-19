@@ -1,5 +1,8 @@
 package com.stano.schema.gensql;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
@@ -13,10 +16,14 @@ import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
 import com.stano.schema.model.Schema;
+import java.io.File;
 import java.io.PrintWriter;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -207,5 +214,65 @@ class GenSQLTest {
 
     verify(mockSQLGenerator).generate();
     verify(mockWriter).close();
+  }
+
+  private static String testSchemaPath() throws URISyntaxException {
+    return new File(GenSQLTest.class.getResource("/test-schema.xml").toURI()).getPath();
+  }
+
+  @Test
+  void runRejectsNonNumericPostgresVersion(@TempDir Path tempDir) throws Exception {
+    File out = tempDir.resolve("out.sql").toFile();
+
+    var x =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                GenSQL.run(
+                    new String[] {
+                      "POSTGRESQL",
+                      testSchemaPath(),
+                      "--postgresql-version=abc",
+                      "--output-file=" + out
+                    }));
+
+    assertTrue(x.getMessage().contains("--postgresql-version"));
+    assertFalse(out.exists());
+  }
+
+  @Test
+  void runRejectsUnknownForeignKeyMode(@TempDir Path tempDir) throws Exception {
+    var x =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                GenSQL.run(
+                    new String[] {
+                      "POSTGRESQL",
+                      testSchemaPath(),
+                      "--foreign-key-mode=bogus",
+                      "--output-file=" + tempDir.resolve("out.sql")
+                    }));
+
+    assertTrue(x.getMessage().contains("--foreign-key-mode"));
+  }
+
+  @Test
+  void runRejectsOutputFileWithMultipleDatabases() throws Exception {
+    var x =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                GenSQL.run(
+                    new String[] {"H2,POSTGRESQL", testSchemaPath(), "--output-file=x.sql"}));
+
+    assertTrue(x.getMessage().contains("--output-file"));
+  }
+
+  @Test
+  void runThrowsWhenSchemaFileIsMissing(@TempDir Path tempDir) {
+    assertThrows(
+        Exception.class,
+        () -> GenSQL.run(new String[] {"POSTGRESQL", tempDir.resolve("missing.xml").toString()}));
   }
 }

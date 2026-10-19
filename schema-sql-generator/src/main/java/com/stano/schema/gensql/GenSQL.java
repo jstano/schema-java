@@ -359,127 +359,149 @@ public class GenSQL {
    * @param args the command-line arguments, as described above
    */
   public static void main(String[] args) {
+    if (args.length < 2) {
+      printUsage();
+      System.exit(1);
+    }
+
     try {
-      if (args.length < 2) {
-        System.out.println(
-            "USAGE: GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]"
-                + " [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]"
-                + " [--postgresql-version=N] [--no-postgres-extensions]"
-                + " [--extension-check-user=name] [--sqlserver-version=N] [--output-file=path]");
-        System.out.println(
-            "   where <target-database> is one or more of: [H2,POSTGRESQL,SQL_SERVER] separated by"
-                + " commas");
-        System.out.println(
-            "   and   <foreign-key-mode> is one of: none,relations,triggers (default is"
-                + " relations)");
-        System.out.println(
-            "   and   <boolean-mode> is one of: native,yes_no,yn (default is native)");
-        System.out.println("   and   <output-indexes-only> causes only indexes to be output");
-        System.out.println("   and   <output-triggers-only> causes only triggers to be output");
-        System.out.println(
-            "   and   <postgresql-version> is the target PostgreSQL major version (e.g., 17,"
-                + " 18)");
-        System.out.println(
-            "   and   <no-postgres-extensions> skips emitting the PostgreSQL create extension"
-                + " block (citext, btree_gist)");
-        System.out.println(
-            "   and   <extension-check-user> is the Postgres role whose superuser privilege is"
-                + " checked in the create extension block (default is CURRENT_USER)");
-        System.out.println(
-            "   and   <sqlserver-version> is the target SQL Server product year (e.g., 2022,"
-                + " 2025); affects the json column type");
-        System.out.println(
-            "   and   <output-file> overrides the default output path; only valid when exactly"
-                + " one target database is requested");
-        System.exit(1);
+      run(args);
+    } catch (Exception x) {
+      System.err.println("Error: " + (x.getMessage() != null ? x.getMessage() : x));
+      System.exit(1);
+    }
+  }
+
+  private static void printUsage() {
+    System.out.println(
+        "USAGE: GenSQL <target-database> <schema-filename> [--foreign-key-mode=mode]"
+            + " [--boolean-mode=mode] [--output-indexes-only] [--output-triggers-only]"
+            + " [--postgresql-version=N] [--no-postgres-extensions]"
+            + " [--extension-check-user=name] [--sqlserver-version=N] [--output-file=path]");
+    System.out.println(
+        "   where <target-database> is one or more of: [H2,POSTGRESQL,SQL_SERVER] separated by"
+            + " commas");
+    System.out.println(
+        "   and   <foreign-key-mode> is one of: none,relations,triggers (default is"
+            + " relations)");
+    System.out.println("   and   <boolean-mode> is one of: native,yes_no,yn (default is native)");
+    System.out.println("   and   <output-indexes-only> causes only indexes to be output");
+    System.out.println("   and   <output-triggers-only> causes only triggers to be output");
+    System.out.println(
+        "   and   <postgresql-version> is the target PostgreSQL major version (e.g., 17," + " 18)");
+    System.out.println(
+        "   and   <no-postgres-extensions> skips emitting the PostgreSQL create extension"
+            + " block (citext, btree_gist)");
+    System.out.println(
+        "   and   <extension-check-user> is the Postgres role whose superuser privilege is"
+            + " checked in the create extension block (default is CURRENT_USER)");
+    System.out.println(
+        "   and   <sqlserver-version> is the target SQL Server product year (e.g., 2022,"
+            + " 2025); affects the json column type");
+    System.out.println(
+        "   and   <output-file> overrides the default output path; only valid when exactly"
+            + " one target database is requested");
+  }
+
+  static void run(String[] args) throws Exception {
+    String targetDatabases = args[0];
+    String schemaFilename = getSchemaFileName(args[1]);
+    URL schemaURL = new URI("file://" + schemaFilename).toURL();
+    Schema schema = new SchemaParser().parseSchema(schemaURL);
+    ForeignKeyMode foreignKeyMode = schema.getForeignKeyMode();
+    BooleanMode booleanMode = schema.getBooleanMode();
+    OutputMode outputMode = OutputMode.ALL;
+    int targetPostgresVersion = 0;
+    boolean emitPostgresExtensions = true;
+    String extensionCheckUser = null;
+    String outputFile = null;
+    int targetSqlServerVersion = 0;
+
+    for (String arg : args) {
+      if (arg.startsWith("--foreign-key-mode=")) {
+        foreignKeyMode = parseEnum(ForeignKeyMode.class, "--foreign-key-mode", arg);
+      } else if (arg.startsWith("--boolean-mode=")) {
+        booleanMode = parseEnum(BooleanMode.class, "--boolean-mode", arg);
+      } else if (arg.equals("--output-indexes-only")) {
+        outputMode = OutputMode.INDEXES_ONLY;
+      } else if (arg.equals("--output-triggers-only")) {
+        outputMode = OutputMode.TRIGGERS_ONLY;
+      } else if (arg.startsWith("--postgresql-version=")) {
+        targetPostgresVersion = parseVersion("--postgresql-version", arg);
+      } else if (arg.equals("--no-postgres-extensions")) {
+        emitPostgresExtensions = false;
+      } else if (arg.startsWith("--extension-check-user=")) {
+        extensionCheckUser = arg.substring("--extension-check-user=".length());
+      } else if (arg.startsWith("--output-file=")) {
+        outputFile = arg.substring("--output-file=".length());
+      } else if (arg.startsWith("--sqlserver-version=")) {
+        targetSqlServerVersion = parseVersion("--sqlserver-version", arg);
+      }
+    }
+
+    Set<DatabaseType> databaseTypes = DatabaseType.getDatabaseTypes(targetDatabases);
+
+    if (outputFile != null && databaseTypes.size() != 1) {
+      throw new IllegalArgumentException(
+          "--output-file may only be used with exactly one target database");
+    }
+
+    boolean hasErrors = false;
+    for (DatabaseType databaseType : databaseTypes) {
+      List<String> validationErrors = DialectValidator.validateForDialect(schema, databaseType);
+
+      if (!validationErrors.isEmpty()) {
+        hasErrors = true;
+        validationErrors.forEach(System.err::println);
+      }
+    }
+
+    if (hasErrors) {
+      throw new IllegalArgumentException("the schema is not valid for the requested database(s)");
+    }
+
+    GenSQL genSQL = new GenSQL();
+
+    for (DatabaseType databaseType : databaseTypes) {
+      File targetFile =
+          outputFile != null
+              ? new File(outputFile)
+              : createOutputFile(schemaFilename, databaseType);
+
+      if (targetFile.getParentFile() != null) {
+        targetFile.getParentFile().mkdirs();
       }
 
-      String targetDatabases = args[0];
-      String schemaFilename = getSchemaFileName(args[1]);
-      URL schemaURL = new URI("file://" + schemaFilename).toURL();
-      Schema schema = new SchemaParser().parseSchema(schemaURL);
-      ForeignKeyMode foreignKeyMode = schema.getForeignKeyMode();
-      BooleanMode booleanMode = schema.getBooleanMode();
-      OutputMode outputMode = OutputMode.ALL;
-      int targetPostgresVersion = 0;
-      boolean emitPostgresExtensions = true;
-      String extensionCheckUser = null;
-      String outputFile = null;
-      int targetSqlServerVersion = 0;
+      genSQL.generateSQL(
+          databaseType,
+          schema,
+          new PrintWriter(new FileWriter(targetFile)),
+          foreignKeyMode,
+          booleanMode,
+          outputMode,
+          databaseType.getStatementSeparator(),
+          targetPostgresVersion,
+          emitPostgresExtensions,
+          extensionCheckUser,
+          targetSqlServerVersion);
+    }
+  }
 
-      for (String arg : args) {
-        if (arg.startsWith("--foreign-key-mode=")) {
-          foreignKeyMode =
-              ForeignKeyMode.valueOf(arg.substring("--foreign-key-mode=".length()).toUpperCase());
-        } else if (arg.startsWith("--boolean-mode=")) {
-          booleanMode =
-              BooleanMode.valueOf(arg.substring("--boolean-mode=".length()).toUpperCase());
-        } else if (arg.equals("--output-indexes-only")) {
-          outputMode = OutputMode.INDEXES_ONLY;
-        } else if (arg.equals("--output-triggers-only")) {
-          outputMode = OutputMode.TRIGGERS_ONLY;
-        } else if (arg.startsWith("--postgresql-version=")) {
-          targetPostgresVersion = Integer.parseInt(arg.substring("--postgresql-version=".length()));
-        } else if (arg.equals("--no-postgres-extensions")) {
-          emitPostgresExtensions = false;
-        } else if (arg.startsWith("--extension-check-user=")) {
-          extensionCheckUser = arg.substring("--extension-check-user=".length());
-        } else if (arg.startsWith("--output-file=")) {
-          outputFile = arg.substring("--output-file=".length());
-        } else if (arg.startsWith("--sqlserver-version=")) {
-          targetSqlServerVersion = Integer.parseInt(arg.substring("--sqlserver-version=".length()));
-        }
-      }
+  private static <E extends Enum<E>> E parseEnum(Class<E> type, String flag, String arg) {
+    String value = arg.substring(flag.length() + 1);
+    try {
+      return Enum.valueOf(type, value.toUpperCase());
+    } catch (IllegalArgumentException x) {
+      throw new IllegalArgumentException("invalid value '" + value + "' for " + flag);
+    }
+  }
 
-      Set<DatabaseType> databaseTypes = DatabaseType.getDatabaseTypes(targetDatabases);
-
-      if (outputFile != null && databaseTypes.size() != 1) {
-        System.err.println(
-            "ERROR: --output-file may only be used with exactly one target database");
-        System.exit(1);
-      }
-
-      boolean hasErrors = false;
-      for (DatabaseType databaseType : databaseTypes) {
-        List<String> validationErrors = DialectValidator.validateForDialect(schema, databaseType);
-
-        if (!validationErrors.isEmpty()) {
-          hasErrors = true;
-          validationErrors.forEach(System.err::println);
-        }
-      }
-
-      if (hasErrors) {
-        System.exit(1);
-      }
-
-      GenSQL genSQL = new GenSQL();
-
-      for (DatabaseType databaseType : databaseTypes) {
-        File targetFile =
-            outputFile != null
-                ? new File(outputFile)
-                : createOutputFile(schemaFilename, databaseType);
-
-        if (targetFile.getParentFile() != null) {
-          targetFile.getParentFile().mkdirs();
-        }
-
-        genSQL.generateSQL(
-            databaseType,
-            schema,
-            new PrintWriter(new FileWriter(targetFile)),
-            foreignKeyMode,
-            booleanMode,
-            outputMode,
-            databaseType.getStatementSeparator(),
-            targetPostgresVersion,
-            emitPostgresExtensions,
-            extensionCheckUser,
-            targetSqlServerVersion);
-      }
-    } catch (Throwable x) {
-      x.printStackTrace();
+  private static int parseVersion(String flag, String arg) {
+    String value = arg.substring(flag.length() + 1);
+    try {
+      return Integer.parseInt(value);
+    } catch (NumberFormatException x) {
+      throw new IllegalArgumentException("invalid value '" + value + "' for " + flag);
     }
   }
 }

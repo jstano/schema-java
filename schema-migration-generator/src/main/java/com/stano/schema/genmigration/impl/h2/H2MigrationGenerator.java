@@ -17,6 +17,7 @@ import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
+import com.stano.schema.diff.change.ModifyEnumTypeChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGenerator;
@@ -368,6 +369,31 @@ public class H2MigrationGenerator extends MigrationGenerator {
     PrintWriter w = options.getWriter();
     w.println("DROP VIEW IF EXISTS " + change.getViewName());
     w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  /**
+   * H2 has no named enum type: each column carries its own inline {@code ENUM(...)} type, and there
+   * is no safe in-place change that preserves a column's other attributes, so the affected columns
+   * are listed in a comment for the developer to alter by hand.
+   */
+  @Override
+  protected void generateModifyEnumType(ModifyEnumTypeChange change) {
+    PrintWriter w = options.getWriter();
+    String name = change.getNewEnumType().getName();
+    w.println(
+        "-- TODO: enum type '"
+            + name
+            + "' changed; H2 stores it inline per column, so alter these columns manually:");
+    if (options.getSchema() != null) {
+      for (var table : options.getSchema().getTables()) {
+        for (var column : table.getColumns()) {
+          if (name.equalsIgnoreCase(column.getEnumType())) {
+            w.println("--   " + table.getName() + "." + column.getName());
+          }
+        }
+      }
+    }
     w.println();
   }
 }

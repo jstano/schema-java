@@ -3,6 +3,7 @@ package com.stano.schema.gensql.impl.common;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
 import com.stano.schema.model.Schema;
+import com.stano.schema.model.Table;
 import java.io.PrintWriter;
 import java.util.List;
 import org.slf4j.Logger;
@@ -142,6 +143,18 @@ public abstract class SQLGenerator {
    * keys when the configured {@link ForeignKeyMode} is {@link ForeignKeyMode#TRIGGERS}.
    */
   protected abstract void outputTriggers();
+
+  /**
+   * Outputs the triggers for a single table (the per-table slice of {@link #outputTriggers()}).
+   * Used by migrations, which regenerate a table's whole trigger set when one of its triggers
+   * changes. The default implementation throws {@link UnsupportedOperationException}; the concrete
+   * generators override it.
+   *
+   * @param table the table to output triggers for
+   */
+  public void outputTriggersForTable(Table table) {
+    throw new UnsupportedOperationException();
+  }
 
   /** Outputs the DDL statements that create functions. */
   protected abstract void outputFunctions();

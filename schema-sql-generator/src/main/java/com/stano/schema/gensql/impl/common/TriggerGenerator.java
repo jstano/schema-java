@@ -13,13 +13,24 @@ public abstract class TriggerGenerator extends BaseGenerator {
 
   public void outputTriggers() {
     for (Table table : schema.getTables()) {
-      if (shouldOutputDeleteTrigger(table)) {
-        outputDeleteTrigger(table, table.getReverseRelations());
-      }
+      outputTriggersForTable(table);
+    }
+  }
 
-      if (shouldOutputUpdateTrigger(table)) {
-        outputUpdateTrigger(table, table.getRelations());
-      }
+  /**
+   * Outputs the delete and update triggers for a single table, as {@link #outputTriggers()} does
+   * for every table. The generated SQL is idempotent (create-or-replace / drop-then-create), so a
+   * migration can call this to regenerate a table's full trigger set.
+   *
+   * @param table the table to output triggers for
+   */
+  public void outputTriggersForTable(Table table) {
+    if (shouldOutputDeleteTrigger(table)) {
+      outputDeleteTrigger(table, table.getReverseRelations());
+    }
+
+    if (shouldOutputUpdateTrigger(table)) {
+      outputUpdateTrigger(table, table.getRelations());
     }
   }
 

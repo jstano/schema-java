@@ -2,31 +2,45 @@ package com.stano.schema.diff;
 
 import com.stano.schema.diff.change.AddColumnChange;
 import com.stano.schema.diff.change.AddConstraintChange;
+import com.stano.schema.diff.change.AddEnumTypeChange;
 import com.stano.schema.diff.change.AddFunctionChange;
+import com.stano.schema.diff.change.AddInitialDataChange;
 import com.stano.schema.diff.change.AddKeyChange;
+import com.stano.schema.diff.change.AddOtherSqlChange;
 import com.stano.schema.diff.change.AddProcedureChange;
 import com.stano.schema.diff.change.AddRelationChange;
 import com.stano.schema.diff.change.AddTableChange;
+import com.stano.schema.diff.change.AddTriggerChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
 import com.stano.schema.diff.change.DropConstraintChange;
+import com.stano.schema.diff.change.DropEnumTypeChange;
 import com.stano.schema.diff.change.DropFunctionChange;
+import com.stano.schema.diff.change.DropInitialDataChange;
 import com.stano.schema.diff.change.DropKeyChange;
+import com.stano.schema.diff.change.DropOtherSqlChange;
 import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
+import com.stano.schema.diff.change.DropTriggerChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
+import com.stano.schema.diff.change.ModifyEnumTypeChange;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.Constraint;
+import com.stano.schema.model.EnumType;
+import com.stano.schema.model.EnumValue;
 import com.stano.schema.model.Function;
+import com.stano.schema.model.InitialData;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyType;
+import com.stano.schema.model.OtherSql;
 import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
+import com.stano.schema.model.Trigger;
 import com.stano.schema.model.View;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -66,7 +80,9 @@ public class SchemaDiffEngine {
    * dependencies and created after theirs: a drop phase, in the order views, functions, procedures,
    * relations, keys, constraints, columns, then tables; followed by an add phase, in the order
    * tables, columns, column modifications, keys, constraints, relations, functions, procedures,
-   * then views.
+   * then views. Enum types, triggers, {@code other_sql} and initial data are also diffed: enum
+   * types and {@code other_sql} are added before tables, enum types are dropped last, triggers are
+   * added after views, and initial data is added last.
    *
    * @param oldSchema the baseline schema (the "before" state)
    * @param newSchema the target schema (the "after" state)
@@ -85,9 +101,17 @@ public class SchemaDiffEngine {
     dropConstraints(changeSet, oldSchema, newSchema);
     dropColumns(changeSet, oldSchema, newSchema);
     dropTables(changeSet, oldSchema, newSchema);
+    dropTriggers(changeSet, oldSchema, newSchema);
+    dropOtherSql(changeSet, oldSchema, newSchema);
+    dropInitialData(changeSet, oldSchema, newSchema);
+    // Last: Postgres can't DROP TYPE while a column still references it.
+    dropEnumTypes(changeSet, oldSchema, newSchema);
 
     // Add phase: tables → columns → modify → keys → constraints → relations → functions →
     // procedures → views
+    // Enum types and other_sql go first - tables and columns may depend on them.
+    addEnumTypes(changeSet, oldSchema, newSchema);
+    addOtherSql(changeSet, oldSchema, newSchema);
     addTables(changeSet, oldSchema, newSchema);
     addColumns(changeSet, oldSchema, newSchema);
     modifyColumns(changeSet, oldSchema, newSchema);
@@ -97,6 +121,9 @@ public class SchemaDiffEngine {
     addFunctions(changeSet, oldSchema, newSchema);
     addProcedures(changeSet, oldSchema, newSchema);
     addViews(changeSet, oldSchema, newSchema);
+    addTriggers(changeSet, oldSchema, newSchema);
+    // Last: initial data rows reference columns and keys that must already exist.
+    addInitialData(changeSet, oldSchema, newSchema);
 
     return changeSet;
   }
@@ -414,6 +441,156 @@ public class SchemaDiffEngine {
         changeSet.addChange(new AddProcedureChange(nw));
       }
     }
+  }
+
+  private void addEnumTypes(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, EnumType> oldByName = indexEnumTypesByName(oldSchema);
+    for (EnumType nw : newSchema.getEnumTypes()) {
+      EnumType old = oldByName.get(nw.getName().toLowerCase());
+      if (old == null) {
+        changeSet.addChange(new AddEnumTypeChange(nw));
+      } else if (!enumTypesEqual(old, nw)) {
+        changeSet.addChange(new ModifyEnumTypeChange(old, nw));
+      }
+    }
+  }
+
+  private void dropEnumTypes(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, EnumType> newByName = indexEnumTypesByName(newSchema);
+    for (EnumType old : oldSchema.getEnumTypes()) {
+      if (!newByName.containsKey(old.getName().toLowerCase())) {
+        changeSet.addChange(new DropEnumTypeChange(old.getName()));
+      }
+    }
+  }
+
+  private Map<String, EnumType> indexEnumTypesByName(Schema schema) {
+    Map<String, EnumType> map = new HashMap<>();
+    for (EnumType enumType : schema.getEnumTypes()) {
+      map.put(enumType.getName().toLowerCase(), enumType);
+    }
+    return map;
+  }
+
+  private boolean enumTypesEqual(EnumType a, EnumType b) {
+    List<EnumValue> av = a.getValues();
+    List<EnumValue> bv = b.getValues();
+    if (av.size() != bv.size()) {
+      return false;
+    }
+    for (int i = 0; i < av.size(); i++) {
+      if (!java.util.Objects.equals(av.get(i).getName(), bv.get(i).getName())
+          || !java.util.Objects.equals(av.get(i).getCode(), bv.get(i).getCode())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private void addOtherSql(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    for (OtherSql nw : newSchema.getOtherSql()) {
+      if (!containsOtherSql(oldSchema.getOtherSql(), nw)) {
+        changeSet.addChange(new AddOtherSqlChange(nw));
+      }
+    }
+  }
+
+  private void dropOtherSql(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    for (OtherSql old : oldSchema.getOtherSql()) {
+      if (!containsOtherSql(newSchema.getOtherSql(), old)) {
+        changeSet.addChange(new DropOtherSqlChange(old));
+      }
+    }
+  }
+
+  private boolean containsOtherSql(List<OtherSql> entries, OtherSql target) {
+    return entries.stream()
+        .anyMatch(
+            o ->
+                o.getDatabaseType() == target.getDatabaseType()
+                    && o.getOrder() == target.getOrder()
+                    && trimmed(o.getSql()).equals(trimmed(target.getSql())));
+  }
+
+  // Triggers are always a separate generation pass, even for a brand-new table, so a new table's
+  // triggers are diffed against an empty list instead of skipping the table.
+  private void addTriggers(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Table> oldTablesByName = indexTablesByName(oldSchema);
+    for (Table newTable : newSchema.getTables()) {
+      Table oldTable = oldTablesByName.get(newTable.getName());
+      List<Trigger> oldTriggers = oldTable == null ? List.of() : oldTable.getTriggers();
+      for (Trigger trigger : newTable.getTriggers()) {
+        if (!containsTrigger(oldTriggers, trigger)) {
+          changeSet.addChange(new AddTriggerChange(newTable.getName(), trigger));
+        }
+      }
+    }
+  }
+
+  private void dropTriggers(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Table> newTablesByName = indexTablesByName(newSchema);
+    for (Table oldTable : oldSchema.getTables()) {
+      Table newTable = newTablesByName.get(oldTable.getName());
+      if (newTable == null) {
+        continue;
+      }
+      for (Trigger trigger : oldTable.getTriggers()) {
+        if (!containsTrigger(newTable.getTriggers(), trigger)) {
+          changeSet.addChange(new DropTriggerChange(oldTable.getName(), trigger));
+        }
+      }
+    }
+  }
+
+  private boolean containsTrigger(List<Trigger> triggers, Trigger target) {
+    return triggers.stream()
+        .anyMatch(
+            t ->
+                t.getTriggerType() == target.getTriggerType()
+                    && t.getDatabaseType() == target.getDatabaseType()
+                    && trimmed(t.getTriggerText()).equals(trimmed(target.getTriggerText())));
+  }
+
+  // Java's AddTableChange only creates an empty table that columns are then added to, so nothing
+  // else emits a new table's initial data: it is diffed against an empty list.
+  private void addInitialData(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Table> oldTablesByName = indexTablesByName(oldSchema);
+    for (Table newTable : newSchema.getTables()) {
+      Table oldTable = oldTablesByName.get(newTable.getName());
+      List<InitialData> oldData = oldTable == null ? List.of() : oldTable.getInitialData();
+      for (InitialData data : newTable.getInitialData()) {
+        if (!containsInitialData(oldData, data)) {
+          changeSet.addChange(new AddInitialDataChange(newTable.getName(), data));
+        }
+      }
+    }
+  }
+
+  private void dropInitialData(ChangeSet changeSet, Schema oldSchema, Schema newSchema) {
+    Map<String, Table> newTablesByName = indexTablesByName(newSchema);
+    for (Table oldTable : oldSchema.getTables()) {
+      Table newTable = newTablesByName.get(oldTable.getName());
+      if (newTable == null) {
+        continue;
+      }
+      for (InitialData data : oldTable.getInitialData()) {
+        if (!containsInitialData(newTable.getInitialData(), data)) {
+          changeSet.addChange(new DropInitialDataChange(oldTable.getName(), data));
+        }
+      }
+    }
+  }
+
+  private boolean containsInitialData(List<InitialData> entries, InitialData target) {
+    return entries.stream()
+        .anyMatch(
+            d ->
+                d.getDatabaseType() == target.getDatabaseType()
+                    && trimmed(d.getSql()).equals(trimmed(target.getSql())));
+  }
+
+  private String trimmed(String s) {
+    return s == null ? "" : s.trim();
   }
 
   private Map<String, Table> indexTablesByName(Schema schema) {

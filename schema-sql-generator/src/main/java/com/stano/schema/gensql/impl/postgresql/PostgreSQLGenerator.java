@@ -12,6 +12,7 @@ import com.stano.schema.gensql.impl.common.TableGenerator;
 import com.stano.schema.gensql.impl.common.TriggerGenerator;
 import com.stano.schema.gensql.impl.common.ViewGenerator;
 import com.stano.schema.model.EnumType;
+import com.stano.schema.model.Table;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
@@ -96,6 +97,12 @@ public class PostgreSQLGenerator extends SQLGenerator {
   protected void outputTriggers() {
 
     triggerGenerator.outputTriggers();
+  }
+
+  @Override
+  public void outputTriggersForTable(Table table) {
+
+    triggerGenerator.outputTriggersForTable(table);
   }
 
   @Override

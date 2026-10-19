@@ -65,25 +65,42 @@ public class GenDiagram {
    * @param args the command-line arguments: the diagram format followed by the schema file path
    */
   public static void main(String[] args) {
-    try {
-      if (args.length < 2) {
-        System.out.println("USAGE: GenDiagram <format> <schema-filename>");
-        System.out.println("   where <format> is one of: MERMAID, PLANTUML");
-        System.exit(1);
-      }
-
-      DiagramFormat format = DiagramFormat.valueOf(args[0].toUpperCase());
-      String schemaFilename = getSchemaFileName(args[1]);
-      URL schemaURL = new URI("file://" + schemaFilename).toURL();
-      Schema schema = new SchemaParser().parseSchema(schemaURL);
-
-      GenDiagram genDiagram = new GenDiagram();
-      genDiagram.generateDiagram(
-          schema,
-          format,
-          new PrintWriter(new FileWriter(createOutputFile(schemaFilename, format))));
-    } catch (Throwable x) {
-      x.printStackTrace();
+    if (args.length < 2) {
+      System.out.println("USAGE: GenDiagram <format> <schema-filename>");
+      System.out.println("   where <format> is one of: MERMAID, PLANTUML");
+      System.exit(1);
     }
+
+    try {
+      run(args);
+    } catch (Exception x) {
+      System.err.println("Error: " + (x.getMessage() != null ? x.getMessage() : x));
+      System.exit(1);
+    }
+  }
+
+  static void run(String[] args) throws Exception {
+    DiagramFormat format;
+    try {
+      format = DiagramFormat.valueOf(args[0].toUpperCase());
+    } catch (IllegalArgumentException x) {
+      throw new IllegalArgumentException(
+          "unknown diagram format '" + args[0] + "' (expected MERMAID or PLANTUML)");
+    }
+
+    String schemaFilename = getSchemaFileName(args[1]);
+    if (schemaFilename.lastIndexOf('.') < 0) {
+      throw new IllegalArgumentException(
+          "schema filename '" + args[1] + "' must have a file extension");
+    }
+
+    URL schemaURL = new URI("file://" + schemaFilename).toURL();
+    Schema schema = new SchemaParser().parseSchema(schemaURL);
+
+    new GenDiagram()
+        .generateDiagram(
+            schema,
+            format,
+            new PrintWriter(new FileWriter(createOutputFile(schemaFilename, format))));
   }
 }

@@ -3,21 +3,30 @@ package com.stano.schema.genmigration.impl.common;
 import com.stano.schema.diff.SchemaChange;
 import com.stano.schema.diff.change.AddColumnChange;
 import com.stano.schema.diff.change.AddConstraintChange;
+import com.stano.schema.diff.change.AddEnumTypeChange;
 import com.stano.schema.diff.change.AddFunctionChange;
+import com.stano.schema.diff.change.AddInitialDataChange;
 import com.stano.schema.diff.change.AddKeyChange;
+import com.stano.schema.diff.change.AddOtherSqlChange;
 import com.stano.schema.diff.change.AddProcedureChange;
 import com.stano.schema.diff.change.AddRelationChange;
 import com.stano.schema.diff.change.AddTableChange;
+import com.stano.schema.diff.change.AddTriggerChange;
 import com.stano.schema.diff.change.AddViewChange;
 import com.stano.schema.diff.change.DropColumnChange;
 import com.stano.schema.diff.change.DropConstraintChange;
+import com.stano.schema.diff.change.DropEnumTypeChange;
 import com.stano.schema.diff.change.DropFunctionChange;
+import com.stano.schema.diff.change.DropInitialDataChange;
 import com.stano.schema.diff.change.DropKeyChange;
+import com.stano.schema.diff.change.DropOtherSqlChange;
 import com.stano.schema.diff.change.DropProcedureChange;
 import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
+import com.stano.schema.diff.change.DropTriggerChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
+import com.stano.schema.diff.change.ModifyEnumTypeChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.gensql.impl.common.ColumnConstraintGenerator;
@@ -26,11 +35,20 @@ import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.gensql.impl.common.SQLGeneratorFactory;
 import com.stano.schema.gensql.impl.common.SQLGeneratorOptions;
 import com.stano.schema.model.Column;
+import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.EnumValue;
 import com.stano.schema.model.ForeignKeyMode;
+import com.stano.schema.model.InitialData;
+import com.stano.schema.model.OtherSql;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
+import com.stano.schema.model.Table;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.Writer;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Abstract base class for dialect-specific migration SQL generators (implemented per-database under
@@ -142,8 +160,146 @@ public abstract class MigrationGenerator {
       if (appliesToThisDialect(c.getDatabaseType())) {
         generateDropView(c);
       }
+    } else if (change instanceof AddEnumTypeChange c) {
+      generateAddEnumType(c);
+    } else if (change instanceof DropEnumTypeChange c) {
+      generateDropEnumType(c);
+    } else if (change instanceof ModifyEnumTypeChange c) {
+      generateModifyEnumType(c);
+    } else if (change instanceof AddOtherSqlChange c) {
+      if (c.getOtherSql().getDatabaseType() == options.getDatabaseType()) {
+        generateAddOtherSql(c.getOtherSql());
+      }
+    } else if (change instanceof DropOtherSqlChange c) {
+      if (c.getOtherSql().getDatabaseType() == options.getDatabaseType()) {
+        writeReviewComment("other_sql entry removed", c.getOtherSql().getSql());
+      }
+    } else if (change instanceof AddTriggerChange c) {
+      if (appliesToThisDialect(c.getTrigger().getDatabaseType())) {
+        regenerateTriggers(c.getTableName());
+      }
+    } else if (change instanceof DropTriggerChange c) {
+      if (appliesToThisDialect(c.getTrigger().getDatabaseType())) {
+        regenerateTriggers(c.getTableName());
+      }
+    } else if (change instanceof AddInitialDataChange c) {
+      if (appliesToThisDialect(c.getInitialData().getDatabaseType())) {
+        generateAddInitialData(c.getInitialData());
+      }
+    } else if (change instanceof DropInitialDataChange c) {
+      if (appliesToThisDialect(c.getInitialData().getDatabaseType())) {
+        writeReviewComment("initial_data entry removed", c.getInitialData().getSql());
+      }
     }
   }
+
+  /** Writes a statement from the schema (other_sql or initial data) followed by the separator. */
+  private void writeStatement(String sql) {
+    PrintWriter w = options.getWriter();
+    w.println(sql);
+    w.print(options.getStatementSeparator());
+    w.println();
+  }
+
+  /**
+   * Generates an {@code other_sql} entry that is new (or changed) in the new schema, passing its
+   * SQL through verbatim. Only called for entries targeting this generator's dialect.
+   */
+  protected void generateAddOtherSql(OtherSql otherSql) {
+    writeStatement(otherSql.getSql());
+  }
+
+  /**
+   * Generates an initial-data statement that is new in the new schema, passing its SQL through
+   * verbatim. Only called for entries that apply to this generator's dialect.
+   */
+  protected void generateAddInitialData(InitialData initialData) {
+    writeStatement(initialData.getSql());
+  }
+
+  /**
+   * Writes a removed {@code other_sql} or initial-data entry as a comment for the developer to
+   * review: arbitrary SQL can't be undone automatically. Every line of the SQL is commented out.
+   */
+  private void writeReviewComment(String what, String sql) {
+    PrintWriter w = options.getWriter();
+    w.println("-- TODO: " + what + ", review manually:");
+    for (String line : sql.strip().split("\\R")) {
+      w.println("--   " + line);
+    }
+    w.println();
+  }
+
+  private final Set<String> triggersRegenerated = new HashSet<>();
+
+  /**
+   * Regenerates the full trigger set of a table with the dialect's own trigger generator, which
+   * emits idempotent SQL (create-or-replace or drop-then-create). Done once per table per run, even
+   * if several of its triggers changed.
+   */
+  private void regenerateTriggers(String tableName) {
+    Schema schema = options.getSchema();
+    if (schema == null || !triggersRegenerated.add(tableName.toLowerCase())) {
+      return;
+    }
+    Table table = schema.getOptionalTable(tableName).orElse(null);
+    if (table == null) {
+      return;
+    }
+    StringWriter buffer = new StringWriter();
+    PrintWriter bufferWriter = new PrintWriter(buffer);
+    SQLGenerator sqlGenerator =
+        new SQLGeneratorFactory()
+            .createSQLGenerator(
+                new SQLGeneratorOptions(
+                    schema,
+                    bufferWriter,
+                    options.getDatabaseType(),
+                    schema.getForeignKeyMode(),
+                    schema.getBooleanMode(),
+                    OutputMode.ALL));
+    sqlGenerator.outputTriggersForTable(table);
+    bufferWriter.flush();
+    options.getWriter().print(buffer);
+  }
+
+  /**
+   * Generates the SQL to create a new enum type. The default does nothing: only PostgreSQL has a
+   * native enum type.
+   */
+  protected void generateAddEnumType(AddEnumTypeChange change) {}
+
+  /** Values (compared by stored code) in the new enum type that the old one did not have. */
+  protected static List<EnumValue> addedEnumValues(ModifyEnumTypeChange change) {
+    return change.getNewEnumType().getValues().stream()
+        .filter(v -> change.getOldEnumType().getValues().stream().noneMatch(o -> codeEquals(o, v)))
+        .toList();
+  }
+
+  /** Values (compared by stored code) in the old enum type that the new one no longer has. */
+  protected static List<EnumValue> removedEnumValues(ModifyEnumTypeChange change) {
+    return change.getOldEnumType().getValues().stream()
+        .filter(v -> change.getNewEnumType().getValues().stream().noneMatch(n -> codeEquals(n, v)))
+        .toList();
+  }
+
+  private static boolean codeEquals(EnumValue a, EnumValue b) {
+    return a.getCode().equals(b.getCode());
+  }
+
+  /** Doubles single quotes so a value can be embedded in a SQL string literal. */
+  protected static String escapeSqlLiteral(String value) {
+    return value.replace("'", "''");
+  }
+
+  /** Generates the SQL to drop an enum type. The default does nothing, as for the add. */
+  protected void generateDropEnumType(DropEnumTypeChange change) {}
+
+  /**
+   * Generates the SQL for an enum type whose values changed. The default does nothing; dialects
+   * override it to either alter the native type or regenerate the per-column check constraints.
+   */
+  protected void generateModifyEnumType(ModifyEnumTypeChange change) {}
 
   /**
    * Returns whether an object restricted to {@code objectDatabaseType} applies to the dialect this
@@ -151,7 +307,7 @@ public abstract class MigrationGenerator {
    * object applies to every dialect) or matches {@link
    * MigrationGeneratorOptions#getDatabaseType()}.
    */
-  private boolean appliesToThisDialect(com.stano.schema.model.DatabaseType objectDatabaseType) {
+  private boolean appliesToThisDialect(DatabaseType objectDatabaseType) {
     return objectDatabaseType == null || objectDatabaseType == options.getDatabaseType();
   }
 

@@ -17,6 +17,7 @@ import com.stano.schema.diff.change.DropRelationChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropViewChange;
 import com.stano.schema.diff.change.ModifyColumnChange;
+import com.stano.schema.diff.change.ModifyEnumTypeChange;
 import com.stano.schema.diff.change.RenameColumnChange;
 import com.stano.schema.diff.change.RenameTableChange;
 import com.stano.schema.genmigration.impl.common.MigrationGenerator;
@@ -29,6 +30,7 @@ import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
+import com.stano.schema.model.EnumValue;
 import com.stano.schema.model.Key;
 import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Naming;
@@ -694,5 +696,48 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     w.println("DROP VIEW IF EXISTS " + change.getViewName());
     w.print(options.getStatementSeparator());
     w.println();
+  }
+
+  /**
+   * SQL Server has no native enum type: an enum is a {@code CHECK} constraint on each column that
+   * uses it. A removed value halts the migration unconditionally (rows may still hold it, and
+   * failing only when such a row happens to exist would hide the decision); then each such column's
+   * check constraint is dropped and recreated from the new value list.
+   */
+  @Override
+  protected void generateModifyEnumType(ModifyEnumTypeChange change) {
+    PrintWriter w = options.getWriter();
+    String name = change.getNewEnumType().getName();
+
+    for (EnumValue value : removedEnumValues(change)) {
+      String code = value.getCode();
+      w.println("-- WARNING: enum value '" + code + "' was removed from '" + name + "'.");
+      w.println(
+          "--   1. If rows still use '"
+              + code
+              + "', add UPDATE statements above this line to migrate them to a valid value, then"
+              + " delete the block below, OR");
+      w.println("--   2. If no rows use '" + code + "', delete the block below to confirm that.");
+      w.print(
+          "THROW 50000, 'Migration halted: enum value ''"
+              + escapeSqlLiteral(code)
+              + "'' was removed from "
+              + escapeSqlLiteral(name)
+              + " - see comment above.', 1");
+      w.print(options.getStatementSeparator());
+      w.println();
+    }
+
+    if (options.getSchema() == null) {
+      return;
+    }
+    for (Table table : options.getSchema().getTables()) {
+      for (Column column : table.getColumns()) {
+        if (name.equalsIgnoreCase(column.getEnumType())) {
+          writeDropCheckConstraint(table.getName(), column.getName());
+          writeAddCheckConstraint(table.getName(), column);
+        }
+      }
+    }
   }
 }

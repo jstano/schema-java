@@ -87,7 +87,8 @@ public class SchemaReverseEngineer {
         }
       }
     } catch (Exception x) {
-      x.printStackTrace();
+      System.err.println("Error: " + (x.getMessage() != null ? x.getMessage() : x));
+      System.exit(1);
     }
   }
 }
