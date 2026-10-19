@@ -6,7 +6,6 @@ import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnPair;
 import com.stano.schema.model.KeyType;
 import com.stano.schema.model.Relation;
-import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
 import java.io.PrintWriter;
@@ -67,7 +66,7 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
 
   private void outputRelations(Table table) {
     for (Relation relation : table.getRelations()) {
-      String cardinality = toCardinality(relation.getType());
+      String cardinality = Cardinality.of(table, relation);
       String fromColumns =
           relation.getColumnPairs().stream()
               .map(ColumnPair::getFromColumnName)
@@ -83,13 +82,6 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
               + fromColumns
               + "\"");
     }
-  }
-
-  private String toCardinality(RelationType type) {
-    return switch (type) {
-      case ENFORCE, CASCADE, DONOTHING -> "}o--||";
-      case SETNULL -> "}o--o|";
-    };
   }
 
   private String toMermaidType(Column column) {

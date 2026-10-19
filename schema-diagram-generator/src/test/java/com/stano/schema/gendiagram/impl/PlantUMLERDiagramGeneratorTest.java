@@ -179,8 +179,8 @@ class PlantUMLERDiagramGeneratorTest {
 
     Table child = buildTable(schema, "CHILD");
     child.getColumns().add(new Column("id", ColumnType.INT, 0, true));
-    child.getColumns().add(new Column("parent_id", ColumnType.INT, 0, false));
-    child.getColumns().add(new Column("tenant_id", ColumnType.INT, 0, false));
+    child.getColumns().add(new Column("parent_id", ColumnType.INT, 0, true));
+    child.getColumns().add(new Column("tenant_id", ColumnType.INT, 0, true));
     child
         .getRelations()
         .add(
