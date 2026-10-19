@@ -111,6 +111,15 @@ public class Relation {
     return columnPairs;
   }
 
+  /**
+   * Returns whether this relation is backed by a real {@code FOREIGN KEY} constraint in {@code
+   * relations} foreign-key mode. {@link RelationType#DONOTHING} means "enforce nothing" (the
+   * trigger generators already emit nothing for it), so it gets no constraint at all.
+   */
+  public boolean createsForeignKeyConstraint() {
+    return type != RelationType.DONOTHING;
+  }
+
   /** Returns whether this relation spans more than one column pair. */
   public boolean isComposite() {
     return columnPairs.size() > 1;

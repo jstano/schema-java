@@ -1,5 +1,7 @@
 package com.stano.schema.model;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * Single source of truth for generated key/index/constraint names ({@code pk_}, {@code ak_}, {@code
  * ix_}, {@code fk_}), shared between the SQL-generator's create path and any migration generator's
@@ -48,8 +50,15 @@ public final class Naming {
   }
 
   /**
-   * Builds {@code prefix + tableName + suffix}, truncating the table-name portion (never the prefix
-   * or suffix) so the result fits within {@link DatabaseType#getMaxKeyNameLength()}.
+   * Builds {@code prefix + tableName + suffix}, lower-cased, truncating the table-name portion
+   * (never the prefix or suffix) so the result fits within {@link
+   * DatabaseType#getMaxKeyNameLength()}.
+   *
+   * <p>PostgreSQL's limit is in <em>bytes</em> (UTF-8); every other database counts characters.
+   * Measuring in characters for PostgreSQL would let a multi-byte table name pass, after which
+   * PostgreSQL silently truncates it further and sibling names that differ only in their (cut-off)
+   * ordinal suffix collide. Lower-casing can change a character's width, so the measurement is
+   * taken on the lower-cased result.
    *
    * <p>Exposed publicly (in addition to the {@code primaryKeyName}/{@code uniqueKeyName}/{@code
    * indexName}/{@code foreignKeyName} convenience methods above) so callers with a non-standard
@@ -58,15 +67,31 @@ public final class Naming {
   public static String buildName(
       DatabaseType databaseType, String prefix, String tableName, String suffix) {
     int maxKeyNameLength = databaseType.getMaxKeyNameLength();
-    String candidate = prefix + tableName + suffix;
+    String fullName = (prefix + tableName + suffix).toLowerCase();
 
-    if (candidate.length() <= maxKeyNameLength) {
-      return candidate;
+    if (measure(databaseType, fullName) <= maxKeyNameLength) {
+      return fullName;
     }
 
-    int available = maxKeyNameLength - (prefix.length() + suffix.length());
-    int truncateTo = Math.max(0, Math.min(available, tableName.length()));
+    // Keep the suffix intact (it carries the ordinal that keeps sibling names distinct) and drop
+    // table-name characters one code point at a time until the whole identifier fits.
+    String lowerPrefix = prefix.toLowerCase();
+    String lowerSuffix = suffix.toLowerCase();
+    StringBuilder name = new StringBuilder(tableName.toLowerCase());
 
-    return prefix + tableName.substring(0, truncateTo) + suffix;
+    while (name.length() > 0
+        && measure(databaseType, lowerPrefix + name + lowerSuffix) > maxKeyNameLength) {
+      name.setLength(name.offsetByCodePoints(name.length(), -1));
+    }
+
+    return lowerPrefix + name + lowerSuffix;
+  }
+
+  private static int measure(DatabaseType databaseType, String name) {
+    if (databaseType == DatabaseType.POSTGRESQL) {
+      return name.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    return name.codePointCount(0, name.length());
   }
 }

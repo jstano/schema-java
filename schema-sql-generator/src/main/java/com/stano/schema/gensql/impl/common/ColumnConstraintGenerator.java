@@ -5,6 +5,7 @@ import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.EnumValue;
 import com.stano.schema.model.Table;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,39 +25,66 @@ public class ColumnConstraintGenerator extends BaseGenerator {
         .collect(Collectors.toList());
   }
 
+  /**
+   * Builds the {@code check(...)} clause for a column, or {@code null} if it needs none.
+   *
+   * <p>A column's boolean-mode restriction, user {@code <check>}, enum restriction and min/max
+   * bounds are independent attributes, not alternatives, so every applicable one is collected and
+   * AND'ed into a single clause (the hashed constraint name only has room for one constraint per
+   * column). A lone clause is rendered without extra parentheses; two or more are each wrapped in
+   * their own parentheses so a user check containing {@code or} can't change meaning.
+   */
   public String getCheckConstraintSQL(Column column) {
+    List<String> clauses = new ArrayList<>();
+
     if (column.getType() == ColumnType.BOOLEAN) {
       if (booleanMode == BooleanMode.YES_NO) {
-        return String.format("check(%s in ('Yes','No'))", column.getName());
+        clauses.add(String.format("%s in ('Yes','No')", column.getName()));
+      } else if (booleanMode == BooleanMode.YN) {
+        clauses.add(String.format("%s in ('Y','N')", column.getName()));
       }
-
-      if (booleanMode == BooleanMode.YN) {
-        return String.format("check(%s in ('Y','N'))", column.getName());
-      }
-
-      return null;
     }
 
     if (column.getCheckConstraint() != null) {
-      return wrapInCheck(column.getCheckConstraint());
+      clauses.add(stripCheckWrapper(column.getCheckConstraint()));
     }
 
-    return buildCheckConstraint(column);
+    if (column.getType() == ColumnType.ENUM) {
+      clauses.add(buildEnumCheckClause(column));
+    }
+
+    if (column.hasMinOrMaxValue()) {
+      clauses.add(buildMinMaxCheckClause(column));
+    }
+
+    if (clauses.isEmpty()) {
+      return null;
+    }
+
+    if (clauses.size() == 1) {
+      return "check(" + clauses.get(0) + ")";
+    }
+
+    return "check("
+        + clauses.stream().map(it -> "(" + it + ")").collect(Collectors.joining(" and "))
+        + ")";
   }
 
   /**
-   * Wraps a user-supplied check-constraint expression in {@code check(...)}, unless it is already
-   * wrapped (case-insensitive, after trimming) — idempotent so a value that already went through
-   * this wrapping (e.g. at parse time) isn't double-wrapped.
+   * Reduces a user-supplied check expression to a bare predicate: a {@code <check>} holds just the
+   * expression, but the user may have written the {@code check(...)} wrapper themselves anyway.
    */
-  private String wrapInCheck(String expression) {
+  private String stripCheckWrapper(String expression) {
     String trimmed = expression.trim();
 
     if (trimmed.toLowerCase().startsWith("check")) {
-      return trimmed;
+      String rest = trimmed.substring(5).trim();
+      if (rest.startsWith("(") && rest.endsWith(")")) {
+        return rest.substring(1, rest.length() - 1);
+      }
     }
 
-    return String.format("check(%s)", trimmed);
+    return trimmed;
   }
 
   private String generateConstraint(Table table, Column column) {
@@ -91,51 +119,26 @@ public class ColumnConstraintGenerator extends BaseGenerator {
     return CK_PREFIX + tableName + "_" + columnName + "_" + hashCode;
   }
 
-  private String buildCheckConstraint(Column column) {
-    if (column.getType() == ColumnType.ENUM) {
-      return buildEnumCheckConstraintSql(column);
-    }
-
-    if (column.hasMinOrMaxValue()) {
-      return buildMinMaxConstraintSql(column);
-    }
-
-    return null;
-  }
-
-  private String buildEnumCheckConstraintSql(Column column) {
+  private String buildEnumCheckClause(Column column) {
     List<EnumValue> enumValues = schema.getEnumType(column.getEnumType()).getValues();
 
     return String.format(
-        "check(%s in (%s))",
+        "%s in (%s)",
         column.getName(),
         enumValues.stream().map(it -> "'" + it.getCode() + "'").collect(Collectors.joining(",")));
   }
 
-  private String buildMinMaxConstraintSql(Column column) {
-    boolean hasMinValue = column.getMinValue() != null;
-    boolean hasMaxValue = column.getMaxValue() != null;
+  private String buildMinMaxCheckClause(Column column) {
+    List<String> bounds = new ArrayList<>();
 
-    StringBuilder constraintSql = new StringBuilder("check(");
-
-    if (hasMinValue) {
-      constraintSql.append(column.getName());
-      constraintSql.append(" >= ");
-      constraintSql.append(column.getMinValue());
+    if (column.getMinValue() != null) {
+      bounds.add(column.getName() + " >= " + column.getMinValue());
     }
 
-    if (hasMinValue && hasMaxValue) {
-      constraintSql.append(" and ");
+    if (column.getMaxValue() != null) {
+      bounds.add(column.getName() + " <= " + column.getMaxValue());
     }
 
-    if (hasMaxValue) {
-      constraintSql.append(column.getName());
-      constraintSql.append(" <= ");
-      constraintSql.append(column.getMaxValue());
-    }
-
-    constraintSql.append(")");
-
-    return constraintSql.toString();
+    return String.join(" and ", bounds);
   }
 }

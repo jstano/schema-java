@@ -17,21 +17,31 @@ public class RelationGenerator extends BaseGenerator {
 
   public void outputRelations() {
 
-    if (schema.getTables().stream().anyMatch(table -> !table.getRelations().isEmpty())) {
+    if (schema.getTables().stream().anyMatch(RelationGenerator::hasForeignKeyRelations)) {
       sqlWriter.println("/* relations */");
     }
 
     schema.getTables().stream()
-        .filter(table -> !table.getRelations().isEmpty())
+        .filter(RelationGenerator::hasForeignKeyRelations)
         .forEach(this::outputRelationsForTable);
 
     sqlWriter.println();
+  }
+
+  private static boolean hasForeignKeyRelations(Table table) {
+
+    return table.getRelations().stream().anyMatch(Relation::createsForeignKeyConstraint);
   }
 
   private void outputRelationsForTable(Table table) {
 
     for (int relationIndex = 0; relationIndex < table.getRelations().size(); relationIndex++) {
       Relation relation = table.getRelations().get(relationIndex);
+
+      // Skipped relations still count toward the ordinal, so siblings keep their names.
+      if (!relation.createsForeignKeyConstraint()) {
+        continue;
+      }
 
       String relationName =
           buildKeyName(FK_PREFIX, table.getName(), String.valueOf(relationIndex + 1));
@@ -66,7 +76,7 @@ public class RelationGenerator extends BaseGenerator {
 
   private String getRelationTypeOperation(RelationType relationType) {
 
-    if (relationType == RelationType.ENFORCE || relationType == RelationType.DONOTHING) {
+    if (relationType == RelationType.ENFORCE) {
       return "no action";
     }
 

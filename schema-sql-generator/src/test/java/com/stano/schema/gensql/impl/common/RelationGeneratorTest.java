@@ -174,6 +174,44 @@ class RelationGeneratorTest {
         "expected composite referenced columns in output: " + output);
   }
 
+  private Schema parentChildSchema(RelationType... types) {
+    Schema schema = new Schema(null);
+
+    Table parent = new Table(null, "public", "parent", null, null, false);
+    parent.getColumns().add(new Column("id", ColumnType.INT, 0, true));
+    schema.addTable(parent);
+
+    Table child = new Table(null, "public", "child", null, null, false);
+    String[] columns = {"a_id", "b_id"};
+    for (int i = 0; i < types.length; i++) {
+      child.getColumns().add(new Column(columns[i], ColumnType.INT, 0, false));
+      child.getRelations().add(new Relation("child", columns[i], "parent", "id", types[i], false));
+    }
+    schema.addTable(child);
+
+    return schema;
+  }
+
+  @Test
+  @DisplayName("donothing relations emit no constraint but keep sibling ordinals stable")
+  void donothingRelationsAreSkippedButOrdinalsStayStable() {
+    String output =
+        generateRelationsSql(parentChildSchema(RelationType.DONOTHING, RelationType.ENFORCE));
+
+    assertTrue(!output.contains("a_id"), "donothing must emit no constraint: " + output);
+    assertTrue(output.contains("foreign key (b_id)"), output);
+    assertTrue(output.contains("fk_child2"), output);
+  }
+
+  @Test
+  @DisplayName("nothing is emitted when every relation is donothing")
+  void nothingEmittedWhenEveryRelationIsDonothing() {
+    String output = generateRelationsSql(parentChildSchema(RelationType.DONOTHING));
+
+    assertTrue(!output.contains("relations"), output);
+    assertTrue(!output.contains("alter table"), output);
+  }
+
   private String generateRelationsSql(Schema schema) {
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);

@@ -288,6 +288,27 @@ public class Schema {
                 table.getName(), String.join(", ", identityColumns)));
       }
 
+      for (Column column : table.getColumns()) {
+        if (column.getGenerated() == null) {
+          continue;
+        }
+
+        if (column.getGenerated().trim().toLowerCase().startsWith("generated")) {
+          errors.add(
+              String.format(
+                  "ERROR: %s.%s has generated='%s'; `generated` must be the bare expression (e.g."
+                      + " \"price * qty\"), not a full clause",
+                  table.getName(), column.getName(), column.getGenerated()));
+        }
+
+        if (column.getDefaultConstraint() != null) {
+          errors.add(
+              String.format(
+                  "ERROR: %s.%s is a generated column and cannot also have a default",
+                  table.getName(), column.getName()));
+        }
+      }
+
       for (Relation relation : table.getRelations()) {
         if (relation.getType() == RelationType.SETNULL) {
           String fromTableName = relation.getFromTableName();

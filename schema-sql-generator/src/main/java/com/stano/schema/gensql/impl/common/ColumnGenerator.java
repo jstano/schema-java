@@ -24,6 +24,15 @@ public abstract class ColumnGenerator extends BaseGenerator {
   protected abstract ColumnTypeGenerator getColumnTypeGenerator();
 
   protected String getColumnSql(Table table, Column column) {
+    // Generated/computed columns take no default in any dialect, so they bypass the options.
+    if (column.getGenerated() != null) {
+      return String.format(
+          "   %s %s%s",
+          column.getName(),
+          getColumnTypeGenerator().getGeneratedColumnSql(table, column, column.getGenerated()),
+          column.isRequired() ? " not null" : "");
+    }
+
     String columnOptions = getColumnOptions(table, column);
 
     if (StringUtils.isNotBlank(columnOptions)) {
@@ -57,11 +66,6 @@ public abstract class ColumnGenerator extends BaseGenerator {
       }
 
       columnOptions.append(createDefaultConstraint(table, column, defaultValue));
-
-      if (column.getGenerated() != null) {
-        columnOptions.append(" ");
-        columnOptions.append(column.getGenerated());
-      }
     }
 
     return columnOptions.toString().trim();

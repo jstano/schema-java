@@ -5,7 +5,6 @@ import com.stano.schema.gensql.impl.common.SQLGenerator;
 import com.stano.schema.model.Aggregation;
 import com.stano.schema.model.AggregationColumn;
 import com.stano.schema.model.AggregationGroup;
-import com.stano.schema.model.Column;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.ForeignKeyMode;
 import com.stano.schema.model.Relation;
@@ -27,13 +26,6 @@ public class PostgreSQLDeleteTriggerGenerator extends BaseGenerator {
 
     String deleteFunctionName = table.getName().toLowerCase() + "_delete";
     String deleteTriggerName = table.getName().toLowerCase() + "_delete";
-
-    List<String> pkColumns = table.getPrimaryKeyColumns();
-    Column column = table.getColumn(pkColumns.get(0));
-
-    if (column == null) {
-      return;
-    }
 
     outputDeleteFunction(table, relations, deleteFunctionName);
 

@@ -22,12 +22,11 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
 
   void outputDeleteTrigger(Table table, List relations) {
 
+    // A table without a primary key can still carry an explicit <delete> trigger; the PK column
+    // is only a default for matching child rows, so it is optional.
     List<String> pkColumns = table.getPrimaryKeyColumns();
-    Column column = table.getColumn(pkColumns.get(0));
-
-    if (column == null) {
-      return;
-    }
+    Column column =
+        pkColumns == null || pkColumns.isEmpty() ? null : table.getColumn(pkColumns.get(0));
 
     String triggerName = table.getName().toLowerCase() + "_delete";
     String schemaName =
@@ -87,6 +86,12 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
         .collect(Collectors.joining(" and "));
   }
 
+  /** The parent-side column matched against child rows: the PK column, else the relation's own. */
+  private String parentColumnName(Relation relation, Column primaryKeyColumn) {
+
+    return primaryKeyColumn != null ? primaryKeyColumn.getName() : relation.getFromColumnName();
+  }
+
   private void outputDeleteEnforceStatements(List relations, Column column) {
 
     Iterator relationIterator = relations.iterator();
@@ -130,16 +135,16 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
                   + " where "
                   + relation.getToColumnName()
                   + " in (select "
-                  + column.getName()
+                  + parentColumnName(relation, column)
                   + " from deleted)) > 0");
           sqlWriter.println("   begin");
           sqlWriter.println(
               "      select @msg = 'The "
                   + getFullyQualifiedTableName(schema.getTable(relation.getFromTableName()))
                   + " ' + (select top 1 convert(varchar, "
-                  + column.getName()
+                  + parentColumnName(relation, column)
                   + ") from deleted where "
-                  + column.getName()
+                  + parentColumnName(relation, column)
                   + " in (select "
                   + relation.getToColumnName()
                   + " from "
@@ -192,7 +197,7 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
                   + " = null where "
                   + relation.getToColumnName()
                   + " in (select "
-                  + column.getName()
+                  + parentColumnName(relation, column)
                   + " from deleted);");
         }
       }
@@ -226,7 +231,7 @@ class SQLServerDeleteTriggerGenerator extends SQLServerBaseTriggerGenerator {
                   + " where "
                   + relation.getToColumnName()
                   + " in (select "
-                  + column.getName()
+                  + parentColumnName(relation, column)
                   + " from deleted);");
         }
       }
