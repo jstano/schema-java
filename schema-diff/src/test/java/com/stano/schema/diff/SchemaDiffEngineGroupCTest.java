@@ -12,7 +12,10 @@ import com.stano.schema.diff.change.DropInitialDataChange;
 import com.stano.schema.diff.change.DropOtherSqlChange;
 import com.stano.schema.diff.change.DropTableChange;
 import com.stano.schema.diff.change.DropTriggerChange;
+import com.stano.schema.diff.change.ModifyColumnChange;
 import com.stano.schema.diff.change.ModifyEnumTypeChange;
+import com.stano.schema.model.Column;
+import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.DatabaseType;
 import com.stano.schema.model.EnumType;
 import com.stano.schema.model.EnumValue;
@@ -186,5 +189,43 @@ class SchemaDiffEngineGroupCTest {
 
     assertEquals(2, changes.size());
     assertTrue(changes.get(1) instanceof AddInitialDataChange);
+  }
+
+  @Test
+  void droppedEnumTypeComesAfterColumnsMoveOffIt() {
+    Schema oldSchema = new Schema(TEST_URL);
+    oldSchema.addEnumType(enumType("Gender", "m", "f"));
+    table(oldSchema, "people").getColumns().add(column("gender", ColumnType.ENUM, "Gender"));
+    Schema newSchema = new Schema(TEST_URL);
+    table(newSchema, "people").getColumns().add(column("gender", ColumnType.VARCHAR, null));
+
+    var changes = engine.diff(oldSchema, newSchema).getChanges();
+
+    int modify = -1;
+    int drop = -1;
+    for (int i = 0; i < changes.size(); i++) {
+      if (changes.get(i) instanceof ModifyColumnChange) {
+        modify = i;
+      } else if (changes.get(i) instanceof DropEnumTypeChange) {
+        drop = i;
+      }
+    }
+    assertTrue(modify >= 0 && drop > modify, changes.toString());
+  }
+
+  private static Column column(String name, ColumnType type, String enumType) {
+    return new Column(
+        name,
+        type,
+        type == ColumnType.VARCHAR ? 10 : 0,
+        0,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        enumType,
+        null);
   }
 }

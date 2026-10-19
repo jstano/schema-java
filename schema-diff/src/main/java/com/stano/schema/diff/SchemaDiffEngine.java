@@ -104,8 +104,6 @@ public class SchemaDiffEngine {
     dropTriggers(changeSet, oldSchema, newSchema);
     dropOtherSql(changeSet, oldSchema, newSchema);
     dropInitialData(changeSet, oldSchema, newSchema);
-    // Last: Postgres can't DROP TYPE while a column still references it.
-    dropEnumTypes(changeSet, oldSchema, newSchema);
 
     // Add phase: tables → columns → modify → keys → constraints → relations → functions →
     // procedures → views
@@ -124,6 +122,9 @@ public class SchemaDiffEngine {
     addTriggers(changeSet, oldSchema, newSchema);
     // Last: initial data rows reference columns and keys that must already exist.
     addInitialData(changeSet, oldSchema, newSchema);
+    // Enum drops go last of all: Postgres can't DROP TYPE while a column still uses it, and columns
+    // that move off a dropped enum are only retyped by modifyColumns in the add phase.
+    dropEnumTypes(changeSet, oldSchema, newSchema);
 
     return changeSet;
   }

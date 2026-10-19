@@ -98,7 +98,8 @@ class GroupCMigrationTest {
     assertTrue(add.contains("CREATE TYPE order_status AS ENUM ('o','it''s')"), add);
 
     String drop = run(DatabaseType.POSTGRESQL, null, new DropEnumTypeChange("OrderStatus"));
-    assertTrue(drop.contains("DROP TYPE IF EXISTS order_status CASCADE"), drop);
+    assertTrue(drop.contains("DROP TYPE IF EXISTS order_status"), drop);
+    assertFalse(drop.contains("CASCADE"), drop);
   }
 
   @Test
@@ -144,6 +145,9 @@ class GroupCMigrationTest {
     assertTrue(drop >= 0 && drop < add, sql);
     assertTrue(sql.contains("'m','f','x'"), sql);
     assertFalse(sql.contains("THROW"), sql);
+    assertTrue(
+        sql.contains("IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('people')"),
+        "only columns that already exist are cycled: " + sql);
   }
 
   @Test

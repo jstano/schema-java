@@ -51,6 +51,7 @@ public class TableColumnContentHandler extends AbstractContentHandler {
               : null;
       minValue = atts.getValue("minValue");
       maxValue = atts.getValue("maxValue");
+      checkConstraint = null;
     } else if (localName.equals("check")) {
       initContentStorage();
     }

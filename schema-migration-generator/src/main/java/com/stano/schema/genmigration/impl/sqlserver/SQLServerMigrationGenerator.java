@@ -208,6 +208,14 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     w.println();
   }
 
+  private static String columnExistsGuard(String table, String column) {
+    return "IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('"
+        + table
+        + "') AND name = '"
+        + column
+        + "') ";
+  }
+
   private void writeAddCheckConstraint(String table, Column col) {
     String checkSql = getCheckConstraintSql(col);
     if (checkSql == null) {
@@ -734,7 +742,12 @@ public class SQLServerMigrationGenerator extends MigrationGenerator {
     for (Table table : options.getSchema().getTables()) {
       for (Column column : table.getColumns()) {
         if (name.equalsIgnoreCase(column.getEnumType())) {
+          // The enum change runs before this migration's new tables and columns exist; those get
+          // the new check from their own add, so only cycle columns that are already there.
+          String guard = columnExistsGuard(table.getName(), column.getName());
+          w.print(guard);
           writeDropCheckConstraint(table.getName(), column.getName());
+          w.print(guard);
           writeAddCheckConstraint(table.getName(), column);
         }
       }

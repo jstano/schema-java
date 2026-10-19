@@ -674,7 +674,7 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
   @Override
   protected void generateDropEnumType(DropEnumTypeChange change) {
     PrintWriter w = options.getWriter();
-    w.println("DROP TYPE IF EXISTS " + enumTypeName(change.getEnumTypeName()) + " CASCADE");
+    w.println("DROP TYPE IF EXISTS " + enumTypeName(change.getEnumTypeName()));
     w.print(options.getStatementSeparator());
     w.println();
   }

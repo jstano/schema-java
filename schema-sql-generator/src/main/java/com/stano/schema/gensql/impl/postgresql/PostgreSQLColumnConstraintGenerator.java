@@ -16,10 +16,6 @@ public class PostgreSQLColumnConstraintGenerator extends ColumnConstraintGenerat
       return null;
     }
 
-    if (column.getType() == ColumnType.VARCHAR) {
-      return String.format("check(length(%s) <= %d)", column.getName(), column.getLength());
-    }
-
     return super.getCheckConstraintSQL(column);
   }
 }

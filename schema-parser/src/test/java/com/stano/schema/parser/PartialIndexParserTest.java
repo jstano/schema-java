@@ -162,4 +162,21 @@ class PartialIndexParserTest {
 
     assertEquals("check(a > 0)", schema.getTable("T").getColumn("a").getCheckConstraint());
   }
+
+  @Test
+  @DisplayName("a column's <check> does not leak into the columns after it")
+  void checkDoesNotLeakIntoLaterColumns() throws Exception {
+    String tableXml =
+        "<table name=\"T\">\n"
+            + "  <columns>\n"
+            + "    <column name=\"a\" type=\"int\"><check>a &gt; 0</check></column>\n"
+            + "    <column name=\"b\" type=\"int\"/>\n"
+            + "  </columns>\n"
+            + "</table>";
+
+    Schema schema = parse(tableXml);
+
+    assertEquals("check(a > 0)", schema.getTable("T").getColumn("a").getCheckConstraint());
+    assertNull(schema.getTable("T").getColumn("b").getCheckConstraint());
+  }
 }
