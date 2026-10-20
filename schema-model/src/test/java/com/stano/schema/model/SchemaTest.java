@@ -364,4 +364,45 @@ class SchemaTest {
         schema.validate().stream().anyMatch(e -> e.contains("relation to 'ghost' which does not")),
         schema.validate().toString());
   }
+
+  @Test
+  @DisplayName(
+      "validate rejects a full generated clause but accepts names that merely start with it")
+  void validateGeneratedPrefix() {
+    Schema schema = new Schema(null);
+    tableOf(
+        schema,
+        "t",
+        new Column(
+            "a",
+            ColumnType.INT,
+            0,
+            0,
+            false,
+            null,
+            null,
+            "generated always as (1)",
+            null,
+            null,
+            null,
+            null),
+        new Column(
+            "b",
+            ColumnType.INT,
+            0,
+            0,
+            false,
+            null,
+            null,
+            "generated_total * 2",
+            null,
+            null,
+            null,
+            null));
+
+    List<String> errors = schema.validate();
+
+    assertEquals(1, errors.size(), errors.toString());
+    assertTrue(errors.get(0).contains("t.a"), errors.get(0));
+  }
 }

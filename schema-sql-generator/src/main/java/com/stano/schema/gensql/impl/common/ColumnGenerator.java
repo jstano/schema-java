@@ -3,6 +3,7 @@ package com.stano.schema.gensql.impl.common;
 import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
+import com.stano.schema.model.Naming;
 import com.stano.schema.model.Table;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -123,20 +124,6 @@ public abstract class ColumnGenerator extends BaseGenerator {
    * generator) can create and drop the exact same constraint.
    */
   public static String defaultConstraintName(String tableName, String columnName) {
-    tableName = tableName.toLowerCase();
-    columnName = columnName.toLowerCase();
-
-    String name = tableName + "_" + columnName;
-    String hashCode = Integer.toHexString(name.hashCode()).toUpperCase();
-
-    if (tableName.length() > 9) {
-      tableName = tableName.substring(0, 9);
-    }
-
-    if (columnName.length() > 9) {
-      columnName = columnName.substring(0, 9);
-    }
-
-    return DF_PREFIX + tableName + "_" + columnName + "_" + hashCode;
+    return Naming.hashedColumnName(DF_PREFIX, tableName, columnName);
   }
 }

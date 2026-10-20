@@ -4,9 +4,11 @@ import com.stano.schema.model.BooleanMode;
 import com.stano.schema.model.Column;
 import com.stano.schema.model.ColumnType;
 import com.stano.schema.model.EnumValue;
+import com.stano.schema.model.Naming;
 import com.stano.schema.model.Table;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 public class ColumnConstraintGenerator extends BaseGenerator {
@@ -77,9 +79,9 @@ public class ColumnConstraintGenerator extends BaseGenerator {
   private String stripCheckWrapper(String expression) {
     String trimmed = expression.trim();
 
-    if (trimmed.toLowerCase().startsWith("check")) {
+    if (trimmed.toLowerCase(Locale.ROOT).startsWith("check")) {
       String rest = trimmed.substring(5).trim();
-      if (rest.startsWith("(") && rest.endsWith(")")) {
+      if (rest.startsWith("(") && closingParen(rest) == rest.length() - 1) {
         return rest.substring(1, rest.length() - 1);
       }
     }
@@ -107,21 +109,7 @@ public class ColumnConstraintGenerator extends BaseGenerator {
 
   /** Static form of {@link #getConstraintName}; it needs no schema, so it works without one. */
   public static String constraintName(String tableName, String columnName) {
-    tableName = tableName.toLowerCase();
-    columnName = columnName.toLowerCase();
-
-    String name = tableName + "_" + columnName;
-    String hashCode = Integer.toHexString(name.hashCode()).toUpperCase();
-
-    if (tableName.length() > 9) {
-      tableName = tableName.substring(0, 9);
-    }
-
-    if (columnName.length() > 9) {
-      columnName = columnName.substring(0, 9);
-    }
-
-    return CK_PREFIX + tableName + "_" + columnName + "_" + hashCode;
+    return Naming.hashedColumnName(CK_PREFIX, tableName, columnName);
   }
 
   private String buildEnumCheckClause(Column column) {
@@ -145,5 +133,26 @@ public class ColumnConstraintGenerator extends BaseGenerator {
     }
 
     return String.join(" and ", bounds);
+  }
+
+  /** The index of the parenthesis closing the one at index 0, skipping quoted text; -1 if none. */
+  private static int closingParen(String text) {
+    int depth = 0;
+    char quote = 0;
+    for (int i = 0; i < text.length(); i++) {
+      char ch = text.charAt(i);
+      if (quote != 0) {
+        if (ch == quote) {
+          quote = 0;
+        }
+      } else if (ch == '\'' || ch == '"') {
+        quote = ch;
+      } else if (ch == '(') {
+        depth++;
+      } else if (ch == ')' && --depth == 0) {
+        return i;
+      }
+    }
+    return -1;
   }
 }

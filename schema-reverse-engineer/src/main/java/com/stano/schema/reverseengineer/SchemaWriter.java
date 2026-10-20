@@ -354,7 +354,7 @@ public class SchemaWriter {
    */
   static String escapeAttr(String value) {
     var escaped = new StringBuilder(value.length());
-    for (char ch : StringEscapeUtils.escapeXml11(value).toCharArray()) {
+    for (char ch : StringEscapeUtils.escapeXml10(value).toCharArray()) {
       switch (ch) {
         case '\n' -> escaped.append("&#10;");
         case '\r' -> escaped.append("&#13;");

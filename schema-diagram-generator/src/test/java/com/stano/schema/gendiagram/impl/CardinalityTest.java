@@ -83,7 +83,35 @@ class CardinalityTest {
 
     assertEquals("}o--o|", Cardinality.of(child, relation));
 
-    child.getColumns().clear();
-    assertEquals("}o--o|", Cardinality.of(child, relation), "unknown columns are not required");
+    Table orphan = new Table(schema, "dbo", "CHILD", null, LockEscalation.AUTO, false);
+    assertEquals("}o--o|", Cardinality.of(orphan, relation), "unknown columns are not required");
+  }
+
+  @Test
+  @DisplayName("column lookup ignores case")
+  void columnLookupIgnoresCase() {
+    Schema schema = new Schema(null);
+    Table child = new Table(schema, "dbo", "CHILD", null, LockEscalation.AUTO, false);
+    child.getColumns().add(new Column("Parent_Id", ColumnType.INT, 0, true));
+    Relation relation =
+        new Relation("CHILD", "parent_id", "PARENT", "id", RelationType.CASCADE, false);
+
+    assertEquals("}o--||", Cardinality.of(child, relation));
+  }
+
+  @Test
+  @DisplayName("table and column names are sanitized into diagram identifiers")
+  void namesAreSanitized() {
+    Schema schema = new Schema(null);
+    Table table = new Table(schema, "dbo", "order-items v2", null, LockEscalation.AUTO, false);
+    table.getColumns().add(new Column("unit price", ColumnType.INT, 0, true));
+    schema.addTable(table);
+
+    String mermaid = render(MermaidERDiagramGenerator::new, schema);
+    String plantUml = render(PlantUMLERDiagramGenerator::new, schema);
+
+    assertTrue(mermaid.contains("order_items_v2 {"), mermaid);
+    assertTrue(mermaid.contains("int unit_price"), mermaid);
+    assertTrue(plantUml.contains("entity order_items_v2 {"), plantUml);
   }
 }

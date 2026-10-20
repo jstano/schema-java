@@ -43,4 +43,26 @@ class NamingTest {
 
     assertEquals(DatabaseType.H2.getMaxKeyNameLength(), name.codePointCount(0, name.length()));
   }
+
+  @Test
+  @DisplayName("check and default constraint names stay within PostgreSQL's byte limit")
+  void hashedColumnNamesAreByteLimited() {
+    String name = Naming.hashedColumnName("ck_", "表".repeat(20), "列".repeat(20));
+
+    assertTrue(name.getBytes(StandardCharsets.UTF_8).length <= 63);
+    assertEquals(
+        "ck_orders_total_", Naming.hashedColumnName("ck_", "ORDERS", "Total").substring(0, 16));
+  }
+
+  @Test
+  @DisplayName("lower-casing does not depend on the default locale")
+  void lowerCasingIsLocaleIndependent() {
+    java.util.Locale original = java.util.Locale.getDefault();
+    try {
+      java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr"));
+      assertEquals("pk_items", Naming.primaryKeyName(DatabaseType.H2, "ITEMS"));
+    } finally {
+      java.util.Locale.setDefault(original);
+    }
+  }
 }

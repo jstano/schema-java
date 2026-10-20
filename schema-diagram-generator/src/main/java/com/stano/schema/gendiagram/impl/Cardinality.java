@@ -21,11 +21,20 @@ final class Cardinality {
   static String of(Table table, Relation relation) {
     boolean allRequired = true;
     for (ColumnPair pair : relation.getColumnPairs()) {
-      Column column = table.getColumn(pair.getFromColumnName());
+      Column column = findColumn(table, pair.getFromColumnName());
       if (column == null || !column.isRequired()) {
         allRequired = false;
       }
     }
     return allRequired ? "}o--||" : "}o--o|";
+  }
+
+  private static Column findColumn(Table table, String name) {
+    for (Column column : table.getColumns()) {
+      if (column.getName().equalsIgnoreCase(name)) {
+        return column;
+      }
+    }
+    return null;
   }
 }

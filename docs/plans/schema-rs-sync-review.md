@@ -30,7 +30,9 @@ Six "merged changes from schema-rs" commits ported Groups A-G from `../schema-rs
 - [x] Mermaid emits `PK FK` for a column that is both (use PK only, like PlantUML).
 
 ### Tier 3 - low / hygiene
-Vacuous 2nd assertion in `CardinalityTest.compositeNeedsEveryColumnRequired` (cached `columnMap`); `Cardinality.of` case-sensitive column lookup; `ck_`/`df_` names not byte-limited; `Naming` needs `Locale.ROOT`; `stripCheckWrapper` mismatched parens; `generated` validation rejects names like `generated_total*2`; schema param used as LIKE pattern in `SchemaReader`; unknown CLI flags ignored; diagram identifier sanitizing; dependent views recreated too early; nullable->required has no guard; SQL Server `THROW` under sqlcmd; XML 1.0 vs `escapeXml11`; `PrintWriter.checkError()` unchecked.
+Done: `CardinalityTest` vacuous assertion and case-insensitive `Cardinality` lookup; `ck_`/`df_` names byte-limited (`Naming.hashedColumnName`); `Naming` uses `Locale.ROOT`; `stripCheckWrapper` matches its closing paren; `generated` validation only rejects a real clause (`generated always|by|as`); `SchemaReader` escapes the schema name used as a LIKE pattern; `GenSQL` rejects unknown `--` flags (the other CLIs use commons-cli, which already does); diagram identifiers sanitized; dependent views recreated after the whole run of column changes; `escapeXml10` instead of `escapeXml11`; `GenSQL` checks `PrintWriter.checkError()`.
+
+Not changed, by decision: nullable->required (Postgres and SQL Server already fail the `SET NOT NULL` with a clear error if NULL rows exist) and SQL Server `THROW` under sqlcmd (scripts need `sqlcmd -b` to halt; a generator-side fix would only work in sqlcmd, not SSMS/JDBC).
 
 ### Cross-repo
 Logged in schema-rs as `M38` in `BUGS_AND_GAPS_2026-09-08.md` (enum drops run before columns move off the type, and use `cascade`; Java fixed in this repo, Rust not yet). Items marked "also Rust" (enum drop order, FK re-add timing, M7 rework if any, check-wrapper stripping, `generated` prefix test, ck_/df_ byte limits) should be fixed in `../schema-rs` too.
@@ -44,4 +46,4 @@ M3 core logic, M8 Naming port, M9 view ordering, M2 SQL shapes, L4/L5, DONOTHING
 - Reverse-engineer and migration SQL: run against postgres:17 in docker as was done for the pg_index query; H2 changes can be tested in-process.
 
 ## Decision
-Tier 1 only plus M7. Tier 1 and M7 done and `./gradlew build` green; Tiers 2-3 not started.
+Tier 1 only plus M7. Tier 1 and M7 done and `./gradlew build` green; Tier 2 done. Tier 3 done except the two items noted above.

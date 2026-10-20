@@ -400,4 +400,18 @@ public class SchemaReaderTest {
     assertTrue(x.getMessage().contains("PostgreSQL only"), x.getMessage());
     assertTrue(x.getMessage().contains("H2"), x.getMessage());
   }
+
+  @Test
+  @DisplayName("the schema name is escaped before it is used as a LIKE pattern")
+  void schemaNameIsEscapedAsLikePattern() throws SQLException {
+    DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+    ResultSet empty = mock(ResultSet.class);
+    when(metaData.getSearchStringEscape()).thenReturn("\\");
+    when(metaData.getTables(null, "my\\_schema", null, new String[] {"TABLE"})).thenReturn(empty);
+
+    reader.populateTables(new Schema(null), metaData, "my_schema");
+
+    org.mockito.Mockito.verify(metaData)
+        .getTables(null, "my\\_schema", null, new String[] {"TABLE"});
+  }
 }

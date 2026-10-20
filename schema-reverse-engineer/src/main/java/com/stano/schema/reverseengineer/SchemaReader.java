@@ -74,9 +74,25 @@ public class SchemaReader {
     }
   }
 
-  private void populateTables(Schema schema, DatabaseMetaData metaData, String dbSchema)
+  /**
+   * {@code getTables}/{@code getColumns} take a LIKE pattern, so escape {@code _} and {@code %}.
+   */
+  private static String schemaPattern(DatabaseMetaData metaData, String dbSchema)
       throws SQLException {
-    try (var resultSet = metaData.getTables(null, dbSchema, null, new String[] {"TABLE"})) {
+    String escape = metaData.getSearchStringEscape();
+    if (escape == null || escape.isEmpty()) {
+      return dbSchema;
+    }
+    return dbSchema
+        .replace(escape, escape + escape)
+        .replace("_", escape + "_")
+        .replace("%", escape + "%");
+  }
+
+  void populateTables(Schema schema, DatabaseMetaData metaData, String dbSchema)
+      throws SQLException {
+    try (var resultSet =
+        metaData.getTables(null, schemaPattern(metaData, dbSchema), null, new String[] {"TABLE"})) {
       while (resultSet.next()) {
         String tableName = resultSet.getString("TABLE_NAME");
         schema.addTable(new Table(schema, dbSchema, tableName, null, null, false));
@@ -86,7 +102,7 @@ public class SchemaReader {
 
   private void populateColumns(Schema schema, DatabaseMetaData metaData, String dbSchema)
       throws SQLException {
-    try (var resultSet = metaData.getColumns(null, dbSchema, null, null)) {
+    try (var resultSet = metaData.getColumns(null, schemaPattern(metaData, dbSchema), null, null)) {
       while (resultSet.next()) {
         String tableName = resultSet.getString("TABLE_NAME");
         String columnName = resultSet.getString("COLUMN_NAME");

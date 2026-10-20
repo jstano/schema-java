@@ -1,6 +1,7 @@
 package com.stano.schema.model;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 /**
  * Single source of truth for generated key/index/constraint names ({@code pk_}, {@code ak_}, {@code
@@ -67,7 +68,7 @@ public final class Naming {
   public static String buildName(
       DatabaseType databaseType, String prefix, String tableName, String suffix) {
     int maxKeyNameLength = databaseType.getMaxKeyNameLength();
-    String fullName = (prefix + tableName + suffix).toLowerCase();
+    String fullName = (prefix + tableName + suffix).toLowerCase(Locale.ROOT);
 
     if (measure(databaseType, fullName) <= maxKeyNameLength) {
       return fullName;
@@ -75,9 +76,9 @@ public final class Naming {
 
     // Keep the suffix intact (it carries the ordinal that keeps sibling names distinct) and drop
     // table-name characters one code point at a time until the whole identifier fits.
-    String lowerPrefix = prefix.toLowerCase();
-    String lowerSuffix = suffix.toLowerCase();
-    StringBuilder name = new StringBuilder(tableName.toLowerCase());
+    String lowerPrefix = prefix.toLowerCase(Locale.ROOT);
+    String lowerSuffix = suffix.toLowerCase(Locale.ROOT);
+    StringBuilder name = new StringBuilder(tableName.toLowerCase(Locale.ROOT));
 
     while (name.length() > 0
         && measure(databaseType, lowerPrefix + name + lowerSuffix) > maxKeyNameLength) {
@@ -85,6 +86,42 @@ public final class Naming {
     }
 
     return lowerPrefix + name + lowerSuffix;
+  }
+
+  /**
+   * Builds {@code prefix + table + "_" + column + "_" + hash} for check and default constraints:
+   * the table and column parts are lower-cased and cut to 9 characters each, and the hash is the
+   * upper-case hex of the untruncated {@code table_column} hash. The parts are further trimmed by
+   * code point if multi-byte characters would push the name past PostgreSQL's 63-byte limit.
+   */
+  public static String hashedColumnName(String prefix, String tableName, String columnName) {
+    String table = tableName.toLowerCase(Locale.ROOT);
+    String column = columnName.toLowerCase(Locale.ROOT);
+    String hash = Integer.toHexString((table + "_" + column).hashCode()).toUpperCase(Locale.ROOT);
+
+    table =
+        table.substring(
+            0, table.offsetByCodePoints(0, Math.min(9, table.codePointCount(0, table.length()))));
+    column =
+        column.substring(
+            0,
+            column.offsetByCodePoints(0, Math.min(9, column.codePointCount(0, column.length()))));
+
+    int maxBytes = DatabaseType.POSTGRESQL.getMaxKeyNameLength();
+    while (bytes(prefix + table + "_" + column + "_" + hash) > maxBytes
+        && (!table.isEmpty() || !column.isEmpty())) {
+      if (table.length() >= column.length()) {
+        table = table.substring(0, table.offsetByCodePoints(table.length(), -1));
+      } else {
+        column = column.substring(0, column.offsetByCodePoints(column.length(), -1));
+      }
+    }
+
+    return prefix + table + "_" + column + "_" + hash;
+  }
+
+  private static int bytes(String name) {
+    return name.getBytes(StandardCharsets.UTF_8).length;
   }
 
   private static int measure(DatabaseType databaseType, String name) {

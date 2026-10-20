@@ -12,6 +12,7 @@ import com.stano.schema.model.Schema;
 import com.stano.schema.parser.SchemaParser;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URL;
 import java.util.List;
@@ -427,6 +428,8 @@ public class GenSQL {
         outputFile = arg.substring("--output-file=".length());
       } else if (arg.startsWith("--sqlserver-version=")) {
         targetSqlServerVersion = parseVersion("--sqlserver-version", arg);
+      } else if (arg.startsWith("--")) {
+        throw new IllegalArgumentException("unknown option '" + arg + "'");
       }
     }
 
@@ -463,10 +466,11 @@ public class GenSQL {
         targetFile.getParentFile().mkdirs();
       }
 
+      PrintWriter writer = new PrintWriter(new FileWriter(targetFile));
       genSQL.generateSQL(
           databaseType,
           schema,
-          new PrintWriter(new FileWriter(targetFile)),
+          writer,
           foreignKeyMode,
           booleanMode,
           outputMode,
@@ -475,6 +479,11 @@ public class GenSQL {
           emitPostgresExtensions,
           extensionCheckUser,
           targetSqlServerVersion);
+
+      // PrintWriter swallows IOExceptions, so a full disk would otherwise leave a truncated file.
+      if (writer.checkError()) {
+        throw new IOException("failed writing " + targetFile);
+      }
     }
   }
 

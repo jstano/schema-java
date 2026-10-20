@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class PostgreSQLMigrationGenerator extends MigrationGenerator {
+  private final java.util.Set<View> pendingViews = new java.util.LinkedHashSet<>();
   private final ColumnTypeMapper mapper;
 
   public PostgreSQLMigrationGenerator(MigrationGeneratorOptions options) {
@@ -232,7 +233,7 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
 
     // Postgres refuses ALTER COLUMN TYPE on a column a view reads ("cannot alter type of a column
     // used by a view or rule"), so any dependent view is dropped first and recreated after the
-    // whole change.
+    // whole run of column changes (see afterColumnModifications).
     List<View> dependentViews = typeChanged ? dependentViews(table, oldCol.getName()) : List.of();
     writeDropViews(dependentViews);
 
@@ -317,7 +318,23 @@ public class PostgreSQLMigrationGenerator extends MigrationGenerator {
       }
     }
 
-    writeRecreateViews(dependentViews);
+    pendingViews.addAll(dependentViews);
+  }
+
+  /**
+   * Recreates the views dropped for the run of column changes, once, after every column has its
+   * final shape, so a view that reads several modified columns never sees a half-migrated table.
+   */
+  @Override
+  protected void afterColumnModifications() {
+    List<View> all =
+        options.getSchema() == null
+            ? List.of()
+            : options.getSchema().getViews(DatabaseType.POSTGRESQL);
+    List<View> views = new ArrayList<>(pendingViews);
+    views.sort(java.util.Comparator.comparingInt(all::indexOf));
+    writeRecreateViews(views);
+    pendingViews.clear();
   }
 
   private static boolean checkAttributesChanged(Column oldCol, Column newCol) {

@@ -52,7 +52,7 @@ public class PlantUMLERDiagramGenerator implements DiagramGenerator {
             .map(ColumnPair::getFromColumnName)
             .collect(Collectors.toSet());
 
-    writer.println("entity " + table.getName() + " {");
+    writer.println("entity " + DiagramIdentifiers.of(table.getName()) + " {");
 
     boolean hasPk = table.getColumns().stream().anyMatch(c -> pkColumns.contains(c.getName()));
     boolean separatorWritten = false;
@@ -83,11 +83,11 @@ public class PlantUMLERDiagramGenerator implements DiagramGenerator {
               .map(ColumnPair::getFromColumnName)
               .collect(Collectors.joining(", "));
       writer.println(
-          relation.getFromTableName()
+          DiagramIdentifiers.of(relation.getFromTableName())
               + " "
               + cardinality
               + " "
-              + relation.getToTableName()
+              + DiagramIdentifiers.of(relation.getToTableName())
               + " : "
               + fromColumns);
     }

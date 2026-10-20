@@ -241,6 +241,23 @@ class GenSQLTest {
   }
 
   @Test
+  void runRejectsUnknownOption(@TempDir Path tempDir) {
+    var x =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                GenSQL.run(
+                    new String[] {
+                      "POSTGRESQL",
+                      testSchemaPath(),
+                      "--output-index-only",
+                      "--output-file=" + tempDir.resolve("out.sql")
+                    }));
+
+    assertTrue(x.getMessage().contains("--output-index-only"));
+  }
+
+  @Test
   void runRejectsUnknownForeignKeyMode(@TempDir Path tempDir) throws Exception {
     var x =
         assertThrows(

@@ -67,4 +67,14 @@ class ColumnConstraintGeneratorTest {
         "check((flag in ('Yes','No')) and (flag >= 0))",
         generator(BooleanMode.YES_NO).getCheckConstraintSQL(flag));
   }
+
+  @Test
+  @DisplayName("a check that only starts with a parenthesised group is not mistaken for a wrapper")
+  void mismatchedParenthesesAreNotUnwrapped() {
+    Column amount = column("amount", ColumnType.INT, "check (a > 1) or (b < 2)", null, null);
+
+    assertEquals(
+        "check(check (a > 1) or (b < 2))",
+        generator(BooleanMode.NATIVE).getCheckConstraintSQL(amount));
+  }
 }

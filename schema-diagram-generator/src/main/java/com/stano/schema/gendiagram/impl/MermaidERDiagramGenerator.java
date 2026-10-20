@@ -50,9 +50,9 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
             .map(ColumnPair::getFromColumnName)
             .collect(Collectors.toSet());
 
-    writer.println("  " + table.getName() + " {");
+    writer.println("  " + DiagramIdentifiers.of(table.getName()) + " {");
     for (Column column : table.getColumns()) {
-      writer.print("    " + toMermaidType(column) + " " + column.getName());
+      writer.print("    " + toMermaidType(column) + " " + DiagramIdentifiers.of(column.getName()));
       if (pkColumns.contains(column.getName())) {
         writer.print(" PK");
       } else if (fkColumns.contains(column.getName())) {
@@ -69,14 +69,15 @@ public class MermaidERDiagramGenerator implements DiagramGenerator {
       String fromColumns =
           relation.getColumnPairs().stream()
               .map(ColumnPair::getFromColumnName)
-              .collect(Collectors.joining(", "));
+              .collect(Collectors.joining(", "))
+              .replace("\"", "'");
       writer.println(
           "  "
-              + relation.getFromTableName()
+              + DiagramIdentifiers.of(relation.getFromTableName())
               + " "
               + cardinality
               + " "
-              + relation.getToTableName()
+              + DiagramIdentifiers.of(relation.getToTableName())
               + " : \""
               + fromColumns
               + "\"");

@@ -238,6 +238,32 @@ class GroupBMigrationTest {
   }
 
   @Test
+  @DisplayName("a view is recreated once, after every column change in the run")
+  void viewsAreRecreatedAfterTheWholeRun() {
+    Schema schema = schemaWithViews();
+    String sql =
+        run(
+            DatabaseType.POSTGRESQL,
+            schema,
+            new ModifyColumnChange(
+                "orders",
+                column("amount", ColumnType.INT, false, null, null),
+                column("amount", ColumnType.LONG, false, null, null)),
+            new ModifyColumnChange(
+                "orders",
+                column("id", ColumnType.INT, true, null, null),
+                column("id", ColumnType.LONG, true, null, null)));
+
+    int lastAlter = sql.lastIndexOf("ALTER COLUMN");
+    int firstCreate = sql.indexOf("CREATE OR REPLACE VIEW v_amounts");
+    assertTrue(lastAlter < firstCreate, sql);
+    assertEquals(
+        sql.indexOf("CREATE OR REPLACE VIEW v_amounts"),
+        sql.lastIndexOf("CREATE OR REPLACE VIEW v_amounts"),
+        sql);
+  }
+
+  @Test
   @DisplayName("M37: dropping a column drops and recreates the views that read it")
   void dropColumnCyclesDependentViews() {
     String sql =

@@ -22,6 +22,10 @@ import org.apache.commons.collections4.map.CaseInsensitiveMap;
  * generation settings such as {@link ForeignKeyMode} and {@link BooleanMode}.
  */
 public class Schema {
+  private static final java.util.regex.Pattern GENERATED_CLAUSE =
+      java.util.regex.Pattern.compile(
+          "^generated\\s+(always|by|as)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+
   private final URL schemaURL;
   private final List<Table> tables = new ArrayList<>();
   private final List<View> views = new ArrayList<>();
@@ -295,7 +299,7 @@ public class Schema {
           continue;
         }
 
-        if (column.getGenerated().trim().toLowerCase().startsWith("generated")) {
+        if (GENERATED_CLAUSE.matcher(column.getGenerated().trim()).find()) {
           errors.add(
               String.format(
                   "ERROR: %s.%s has generated='%s'; `generated` must be the bare expression (e.g."
