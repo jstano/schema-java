@@ -65,7 +65,7 @@ public class SchemaReverseEngineer {
           Option.builder()
               .longOpt("db-schema")
               .hasArg()
-              .desc("database schema to introspect (default: public)")
+              .desc("database schema to introspect (default: public, or dbo on SQL Server)")
               .get());
 
       var parser = new DefaultParser();
@@ -78,7 +78,7 @@ public class SchemaReverseEngineer {
               cmd.getOptionValue("password"))) {
         var schemaFile = new File(cmd.getOptionValue("file"));
         var schemaReader = new SchemaReader();
-        var dbSchema = cmd.getOptionValue("db-schema", SchemaReader.DEFAULT_SCHEMA);
+        var dbSchema = cmd.getOptionValue("db-schema", SchemaReader.defaultSchema(connection));
         var schema = schemaReader.readSchema(connection, dbSchema);
 
         try (var writer = new PrintWriter(new FileWriter(schemaFile))) {

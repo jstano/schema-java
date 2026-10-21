@@ -14,6 +14,7 @@ import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
+import com.stano.schema.model.View;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
@@ -55,18 +56,28 @@ public class SchemaReader {
       var metaData = connection.getMetaData();
 
       String product = metaData.getDatabaseProductName();
-      if (!"PostgreSQL".equalsIgnoreCase(product)) {
+      boolean postgres = "PostgreSQL".equalsIgnoreCase(product);
+      boolean sqlServer = "Microsoft SQL Server".equalsIgnoreCase(product);
+      if (!postgres && !sqlServer) {
         throw new IllegalArgumentException(
-            "reverse engineering supports PostgreSQL only, but the database is " + product);
+            "reverse engineering supports PostgreSQL and SQL Server only, but the database is "
+                + product);
       }
 
       populateTables(schema, metaData, dbSchema);
+      if (sqlServer) {
+        populateImportedKeys(schema, metaData, dbSchema);
+        new SqlServerSchemaReader().populate(schema, connection, dbSchema);
+        return schema;
+      }
+
       populateColumns(schema, metaData, dbSchema);
       populatePrimaryKeys(schema, metaData, dbSchema);
       populateConstraints(schema, connection, dbSchema);
       populateKeys(schema, connection, dbSchema);
       populateImportedKeys(schema, metaData, dbSchema);
       populateRoutines(schema, connection, dbSchema);
+      populateViews(schema, connection, dbSchema);
 
       return schema;
     } catch (SQLException x) {
@@ -87,6 +98,17 @@ public class SchemaReader {
         .replace(escape, escape + escape)
         .replace("_", escape + "_")
         .replace("%", escape + "%");
+  }
+
+  /**
+   * The schema introspected when none is named: {@code dbo} on SQL Server, {@code public} on
+   * Postgres.
+   */
+  public static String defaultSchema(Connection connection) throws SQLException {
+    return "Microsoft SQL Server"
+            .equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())
+        ? SqlServerSchemaReader.DEFAULT_SCHEMA
+        : DEFAULT_SCHEMA;
   }
 
   void populateTables(Schema schema, DatabaseMetaData metaData, String dbSchema)
@@ -154,7 +176,7 @@ public class SchemaReader {
     }
   }
 
-  private void populatePrimaryKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
+  void populatePrimaryKeys(Schema schema, DatabaseMetaData metaData, String dbSchema)
       throws SQLException {
     var primaryKeyData = new HashMap<String, List<PrimaryKeyData>>();
 
@@ -412,6 +434,47 @@ public class SchemaReader {
           } else {
             schema.addFunction(new Function(dbSchema, name, DatabaseType.POSTGRESQL, sql));
           }
+        }
+      }
+    }
+  }
+
+  /**
+   * Reads the views of {@code dbSchema}. {@code information_schema.views} omits materialized views,
+   * which the model has no concept of; they are reported and skipped.
+   */
+  private void populateViews(Schema schema, Connection connection, String dbSchema)
+      throws SQLException {
+    try (var statement =
+        connection.prepareStatement(
+            "SELECT table_name, view_definition FROM information_schema.views"
+                + " WHERE table_schema = ? ORDER BY table_name")) {
+      statement.setString(1, dbSchema);
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          String name = rs.getString("table_name");
+          String sql = rs.getString("view_definition");
+          if (sql == null) {
+            Warnings.warn(
+                LOGGER, "Definition of view {} is not visible to this role - skipping it", name);
+            continue;
+          }
+          schema.addView(
+              new View(dbSchema, name, trimRoutineDefinition(sql), DatabaseType.POSTGRESQL));
+        }
+      }
+    }
+
+    try (var statement =
+        connection.prepareStatement(
+            "SELECT matviewname FROM pg_matviews WHERE schemaname = ? ORDER BY matviewname")) {
+      statement.setString(1, dbSchema);
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          Warnings.warn(
+              LOGGER,
+              "{} is a materialized view, which the schema model can't represent - skipping it",
+              rs.getString("matviewname"));
         }
       }
     }

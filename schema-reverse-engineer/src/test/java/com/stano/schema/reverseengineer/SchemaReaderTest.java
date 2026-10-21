@@ -388,8 +388,8 @@ public class SchemaReaderTest {
   }
 
   @Test
-  @DisplayName("readSchema rejects a database that is not PostgreSQL")
-  void readSchemaRejectsNonPostgres() throws SQLException {
+  @DisplayName("readSchema rejects a database that is neither PostgreSQL nor SQL Server")
+  void readSchemaRejectsUnsupportedDatabase() throws SQLException {
     Connection connection = mock(Connection.class);
     DatabaseMetaData metaData = mock(DatabaseMetaData.class);
     when(connection.getMetaData()).thenReturn(metaData);
@@ -397,7 +397,7 @@ public class SchemaReaderTest {
 
     var x = assertThrows(IllegalArgumentException.class, () -> reader.readSchema(connection));
 
-    assertTrue(x.getMessage().contains("PostgreSQL only"), x.getMessage());
+    assertTrue(x.getMessage().contains("PostgreSQL and SQL Server only"), x.getMessage());
     assertTrue(x.getMessage().contains("H2"), x.getMessage());
   }
 

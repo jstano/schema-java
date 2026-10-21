@@ -16,6 +16,7 @@ dependencies {
     api("ch.qos.logback:logback-classic:1.5.34")
     api("ch.qos.logback:logback-core:1.5.34")
     api("com.h2database:h2:2.1.214")
+    api("com.microsoft.sqlserver:mssql-jdbc:13.6.1.jre11")
     api("commons-cli:commons-cli:1.11.0")
     api("commons-io:commons-io:2.22.0")
     api("net.bytebuddy:byte-buddy:1.18.10")

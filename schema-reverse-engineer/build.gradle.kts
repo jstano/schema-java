@@ -7,6 +7,7 @@ dependencies {
   implementation("org.apache.commons:commons-lang3")
   implementation("org.apache.commons:commons-text")
   implementation("org.slf4j:slf4j-api")
+  implementation("com.microsoft.sqlserver:mssql-jdbc")
   implementation("org.postgresql:postgresql")
 
   testImplementation(project(":schema-parser"))

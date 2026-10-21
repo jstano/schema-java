@@ -11,6 +11,7 @@ import com.stano.schema.model.Procedure;
 import com.stano.schema.model.Relation;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
+import com.stano.schema.model.View;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -66,6 +67,7 @@ public class SchemaWriter {
     Map<String, List<Table>> tablesBySchema = new LinkedHashMap<>();
     Map<String, List<Function>> functionsBySchema = new LinkedHashMap<>();
     Map<String, List<Procedure>> proceduresBySchema = new LinkedHashMap<>();
+    Map<String, List<View>> viewsBySchema = new LinkedHashMap<>();
     for (Table table : schema.getTables()) {
       tablesBySchema
           .computeIfAbsent(schemaKey(table.getSchemaName()), k -> new ArrayList<>())
@@ -82,10 +84,17 @@ public class SchemaWriter {
           .add(procedure);
     }
 
+    for (View view : schema.getViews()) {
+      viewsBySchema
+          .computeIfAbsent(schemaKey(view.getSchemaName()), k -> new ArrayList<>())
+          .add(view);
+    }
+
     var schemaNames = new LinkedHashSet<String>();
     schemaNames.addAll(tablesBySchema.keySet());
     schemaNames.addAll(functionsBySchema.keySet());
     schemaNames.addAll(proceduresBySchema.keySet());
+    schemaNames.addAll(viewsBySchema.keySet());
 
     boolean first = true;
     for (String schemaName : schemaNames) {
@@ -102,6 +111,13 @@ public class SchemaWriter {
         }
         first = false;
         outputTable(table);
+      }
+      for (View view : viewsBySchema.getOrDefault(schemaName, List.of())) {
+        if (!first) {
+          out.println();
+        }
+        first = false;
+        outputView(view);
       }
       for (Function function : functionsBySchema.getOrDefault(schemaName, List.of())) {
         if (!first) {
@@ -129,9 +145,22 @@ public class SchemaWriter {
   }
 
   private static String schemaKey(String schemaName) {
-    return (schemaName == null || schemaName.isBlank() || schemaName.equalsIgnoreCase("public"))
+    return (schemaName == null
+            || schemaName.isBlank()
+            || schemaName.equalsIgnoreCase("public")
+            || schemaName.equalsIgnoreCase("dbo"))
         ? ""
         : schemaName;
+  }
+
+  private void outputView(View view) {
+    String databaseType =
+        view.getDatabaseType() == null
+            ? ""
+            : " databaseType=\"" + view.getDatabaseType().toString().toLowerCase() + "\"";
+    out.printf(
+        "  <view name=\"%s\"%s>%s</view>\n",
+        escapeAttr(view.getName()), databaseType, cdata(view.getSql()));
   }
 
   private void outputRoutine(String tag, String name, DatabaseType databaseType, String sql) {

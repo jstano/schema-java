@@ -18,6 +18,7 @@ import com.stano.schema.model.Relation;
 import com.stano.schema.model.RelationType;
 import com.stano.schema.model.Schema;
 import com.stano.schema.model.Table;
+import com.stano.schema.model.View;
 import com.stano.schema.parser.SchemaParser;
 import java.io.ByteArrayInputStream;
 import java.io.PrintWriter;
@@ -250,5 +251,26 @@ public class SchemaWriterTest {
 
     assertEquals("a * 2", reparsed.getTable("t").getColumn("b").getGenerated());
     assertTrue(reparsed.validate().isEmpty(), reparsed.validate().toString());
+  }
+
+  @Test
+  @DisplayName("outputSchema writes views so they round-trip through the parser")
+  void viewsRoundTrip() {
+    Schema schema = new Schema(null);
+    schema.addView(
+        new View(
+            "dbo", "v1", "select a from t where b > 1 -- ]]> tricky", DatabaseType.SQL_SERVER));
+    schema.addView(new View("public", "v2", "select 1", null));
+
+    String xml = write(schema);
+    Schema reparsed = reparse(xml);
+
+    assertEquals(2, reparsed.getViews().size());
+    View first = reparsed.getViews().get(0);
+    assertEquals("v1", first.getName());
+    assertEquals(DatabaseType.SQL_SERVER, first.getDatabaseType());
+    assertTrue(first.getSql().contains("]]> tricky"), first.getSql());
+    assertEquals("v2", reparsed.getViews().get(1).getName());
+    assertFalse(xml.contains("<schema name=\"dbo\""), xml);
   }
 }
